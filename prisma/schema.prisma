@@ -1,0 +1,511 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  customer
+  worker
+  admin
+}
+
+enum OtpPurpose {
+  signup
+  login
+  password_reset
+}
+
+
+enum PaymentMethod {
+  online
+  cash
+}
+
+enum PaymentStatus {
+  unpaid
+  paid
+  failed
+  refunded
+}
+
+enum BookingStatus {
+  pending
+  accepted
+  on_the_way
+  started
+  rejected
+  in_progress
+  completed
+  cancelled
+}
+
+enum ListingType {
+  free
+  promoted
+}
+
+enum SubscriptionPlan {
+  none
+  starter
+  growth
+  pro
+}
+
+enum LeadStatus {
+  open
+  hired
+  closed
+}
+
+enum LeadQuoteStatus {
+  sent
+  selected
+  rejected
+}
+
+enum EnquiryStatus {
+  open
+  closed
+}
+
+enum AnalyticsEventType {
+  view
+  call_click
+  whatsapp_click
+  enquiry_submit
+}
+
+enum CouponType {
+  flat
+  percent
+}
+
+model User {
+  id            String          @id @default(cuid())
+  name          String
+  email         String          @unique
+  phone         String          @unique
+  profilePhotoUrl String        @default("") @db.LongText
+  city          String          @default("")
+  address       String          @default("")
+  phoneVerified Boolean         @default(false)
+  isVerifiedPlus Boolean        @default(false)
+  isPriorityBoosted Boolean     @default(false)
+  isComplaintFlagged Boolean    @default(false)
+  complaintFlagNote String      @default("")
+  listingType    ListingType    @default(free)
+  subscriptionPlan SubscriptionPlan @default(none)
+  subscriptionEndsAt DateTime?
+  adCredits      Int            @default(0)
+  passwordHash  String
+  role          UserRole
+  isApproved    Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  workerProfile WorkerProfile?
+  customerBookings Booking[]    @relation("CustomerBookings")
+  workerBookings   Booking[]    @relation("WorkerBookings")
+  customerReviews  Review[]     @relation("CustomerReviews")
+  workerReviews    Review[]     @relation("WorkerReviews")
+  customerLeads    Lead[]       @relation("CustomerLeads")
+  hiredLeads       Lead[]       @relation("HiredWorkerLeads")
+  workerLeadQuotes LeadQuote[]  @relation("WorkerLeadQuotes")
+  sentLeadMessages LeadMessage[] @relation("LeadMessageSender")
+  receivedLeadMessages LeadMessage[] @relation("LeadMessageReceiver")
+  vendorBusinesses Business[]   @relation("VendorBusinesses")
+  favoriteBusinesses FavoriteBusiness[] @relation("CustomerFavoriteBusinesses")
+  businessReviews   BusinessReview[] @relation("CustomerBusinessReviews")
+  customerEnquiries Enquiry[]   @relation("CustomerEnquiries")
+  analyticsEvents   AnalyticsEvent[] @relation("ActorAnalyticsEvents")
+}
+
+model WorkerProfile {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  photoUrl           String   @default("") @db.LongText
+  location           String   @default("")
+  isOnDuty           Boolean  @default(true)
+  skills             Json
+  serviceAreas       Json?
+  portfolioUrls      Json?
+  portfolioVideoUrls Json?
+  certifications     Json?
+  responseTimeMins   Int      @default(30)
+  workingHours       String   @default("")
+  priceFrom          Float    @default(0)
+  priceTo            Float    @default(0)
+  experienceYears    Int      @default(0)
+  bio                String   @default("")
+  aadhaarNumberMasked String  @default("")
+  aadhaarCardUrl     String   @default("") @db.LongText
+  pricePerHour       Float    @default(0)
+  rating             Float    @default(0)
+  totalJobs          Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model HomeBanner {
+  id              String   @id @db.VarChar(40)
+  bannerKey        String   @unique @db.VarChar(80)
+  title            String   @db.VarChar(160)
+  subtitle         String   @db.Text
+  highlightText    String   @db.VarChar(255)
+  imageUrl         String   @db.Text
+  targetServiceKey String?  @db.VarChar(80)
+  toneStart        String?  @db.VarChar(20)
+  toneEnd          String?  @db.VarChar(20)
+  isActive         Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  updatedById      String?  @db.VarChar(191)
+
+  @@map("HomeBanner")
+  @@index([isActive, sortOrder, updatedAt], name: "idx_homebanner_active_sort")
+}
+
+model HomeHeroOffer {
+  id         String   @id @db.VarChar(40)
+  offerText  String   @db.VarChar(160)
+  subtitle   String   @db.Text
+  couponCode String?  @db.VarChar(24)
+  toneStart  String?  @db.VarChar(20)
+  toneEnd    String?  @db.VarChar(20)
+  isActive   Boolean  @default(true)
+  updatedAt  DateTime @updatedAt
+  updatedById String? @db.VarChar(191)
+
+  @@map("HomeHeroOffer")
+}
+
+model EmailOtp {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  purpose   OtpPurpose @default(signup)
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Service {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  basePrice Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  bookings  Booking[]
+}
+
+model Booking {
+  id            String        @id @default(cuid())
+  customerId    String
+  workerId      String
+  serviceId     String
+  customerPhone String
+  address       String
+  dateTime      DateTime
+  hours         Int
+  totalAmount   Float
+  packageTitle  String?       @db.VarChar(160)
+  packageDescription String?  @db.Text
+  packagePrice  Float?
+  paymentMethod PaymentMethod
+  paymentStatus PaymentStatus
+  status        BookingStatus @default(pending)
+  etaMinutes    Int           @default(0)
+  acceptedAt    DateTime?
+  onTheWayAt    DateTime?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  cancelledAt   DateTime?
+  cancellationReason String   @default("")
+  rescheduleCount Int         @default(0)
+  lastRescheduledAt DateTime?
+  workerLiveLat Float?
+  workerLiveLng Float?
+  workerLiveUpdatedAt DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  customer      User          @relation("CustomerBookings", fields: [customerId], references: [id], onDelete: Cascade)
+  worker        User          @relation("WorkerBookings", fields: [workerId], references: [id], onDelete: Cascade)
+  service       Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  review        Review?
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  bookingId  String   @unique
+  customerId String
+  workerId   String
+  rating     Int
+  comment    String
+  photoUrl   String   @default("") @db.LongText
+  tags       Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  customer   User     @relation("CustomerReviews", fields: [customerId], references: [id], onDelete: Cascade)
+  worker     User     @relation("WorkerReviews", fields: [workerId], references: [id], onDelete: Cascade)
+}
+
+model Lead {
+  id               String          @id @default(cuid())
+  customerId       String
+  serviceName      String
+  description      String
+  address          String
+  budgetMin        Float
+  budgetMax        Float
+  preferredDateTime DateTime?
+  status           LeadStatus      @default(open)
+  selectedWorkerId String?
+  selectedQuoteId  String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  customer         User            @relation("CustomerLeads", fields: [customerId], references: [id], onDelete: Cascade)
+  selectedWorker   User?           @relation("HiredWorkerLeads", fields: [selectedWorkerId], references: [id], onDelete: SetNull)
+  quotes           LeadQuote[]
+  messages         LeadMessage[]
+}
+
+model LeadQuote {
+  id         String          @id @default(cuid())
+  leadId     String
+  workerId   String
+  amount     Float
+  message    String          @default("")
+  etaHours   Int             @default(24)
+  status     LeadQuoteStatus @default(sent)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  lead       Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  worker     User            @relation("WorkerLeadQuotes", fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, workerId])
+}
+
+model LeadMessage {
+  id         String   @id @default(cuid())
+  leadId     String
+  senderId   String
+  receiverId String
+  message    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  sender     User     @relation("LeadMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User     @relation("LeadMessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+}
+
+model Category {
+  id         String    @id @default(cuid())
+  name       String
+  slug       String    @unique
+  icon       String    @default("")
+  isActive   Boolean   @default(true)
+  sortOrder  Int       @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  businesses Business[]
+}
+
+model Business {
+  id                String           @id @default(cuid())
+  vendorUserId      String
+  name              String
+  description       String           @default("")
+  categoryId        String
+  address           String           @default("")
+  city              String           @default("")
+  locationText      String           @default("")
+  lat               Float?
+  lng               Float?
+  coverPhotoUrl     String           @default("") @db.LongText
+  isApproved        Boolean          @default(false)
+  avgRating         Float            @default(0)
+  totalReviews      Int              @default(0)
+  listingType       ListingType      @default(free)
+  subscriptionPlan  SubscriptionPlan @default(none)
+  subscriptionEndsAt DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  vendor            User             @relation("VendorBusinesses", fields: [vendorUserId], references: [id], onDelete: Cascade)
+  category          Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  photos            BusinessPhoto[]
+  services          BusinessService[]
+  favorites         FavoriteBusiness[]
+  reviews           BusinessReview[]
+  enquiries         Enquiry[]
+  analyticsEvents   AnalyticsEvent[]
+
+  @@index([categoryId])
+  @@index([city])
+  @@index([isApproved])
+  @@index([avgRating])
+}
+
+model BusinessPhoto {
+  id        String   @id @default(cuid())
+  businessId String
+  url       String   @db.LongText
+  caption   String   @default("")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, sortOrder])
+}
+
+model BusinessService {
+  id        String   @id @default(cuid())
+  businessId String
+  title     String
+  priceFrom Float?
+  priceTo   Float?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, isActive])
+}
+
+model FavoriteBusiness {
+  id         String   @id @default(cuid())
+  customerId String
+  businessId String
+  createdAt  DateTime @default(now())
+  customer   User     @relation("CustomerFavoriteBusinesses", fields: [customerId], references: [id], onDelete: Cascade)
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, businessId])
+  @@index([businessId])
+}
+
+model BusinessReview {
+  id         String   @id @default(cuid())
+  businessId String
+  customerId String
+  rating     Int
+  comment    String
+  photoUrl   String?  @db.LongText
+  tags       Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer   User     @relation("CustomerBusinessReviews", fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, createdAt])
+}
+
+model Enquiry {
+  id         String       @id @default(cuid())
+  businessId String
+  customerId String?
+  name       String
+  mobile     String
+  message    String
+  status     EnquiryStatus @default(open)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  business   Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer   User?          @relation("CustomerEnquiries", fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, createdAt])
+  @@index([customerId])
+}
+
+model AnalyticsEvent {
+  id          String             @id @default(cuid())
+  businessId  String
+  actorUserId String?
+  eventType   AnalyticsEventType
+  createdAt   DateTime           @default(now())
+  business    Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actor       User?               @relation("ActorAnalyticsEvents", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, eventType, createdAt])
+  @@index([actorUserId])
+}
+
+model BroadcastNotification {
+  id         String   @id @default(cuid())
+  title      String
+  message    String   @db.LongText
+  targetRole String   @default("all")
+  createdById String?
+  createdAt  DateTime @default(now())
+
+  @@index([targetRole, createdAt])
+  @@index([createdAt])
+}
+
+model WhatsappOtp {
+  id        String     @id @default(cuid())
+  phone     String
+  otpHash   String
+  expiresAt DateTime
+  attempts  Int        @default(0)
+  purpose   OtpPurpose @default(login)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([phone, purpose])
+}
+
+model Coupon {
+  id             String     @id @default(cuid())
+  code           String     @unique
+  title          String
+  type           CouponType
+  value          Float
+  minOrderAmount Float      @default(0)
+  maxDiscount    Float?
+  startsAt       DateTime?
+  endsAt         DateTime?
+  usageLimit     Int?
+  usedCount      Int        @default(0)
+  isActive       Boolean    @default(true)
+  createdBy      String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([code, isActive])
+}
+
+model PricingItem {
+  id         String   @id @default(cuid())
+  serviceKey String   @unique
+  label      String
+  basePrice  Float
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+model ServicePackage {
+  id        String   @id @default(cuid())
+  serviceKey String
+  title     String
+  price     Float
+  points    Json?
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([serviceKey, isActive, sortOrder])
+}
