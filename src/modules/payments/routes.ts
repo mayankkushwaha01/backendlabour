@@ -8,7 +8,7 @@ import { requireAuth, type AuthRequest } from '../../middleware/auth.js';
 const router = Router();
 
 const createOrderSchema = z.object({
-  target: z.enum(['business', 'worker']),
+  target: z.enum(['worker']).default('worker'),
   planKey: z.enum(['verified', 'verified_top_rated', 'rocket']),
   billingCycle: z.enum(['monthly', 'yearly']).default('monthly'),
   paymentMethod: z.enum(['upi', 'amanpay'])
@@ -132,40 +132,19 @@ router.post('/verify', requireAuth, async (req: AuthRequest, res) => {
   const nextEndsAt = new Date();
   nextEndsAt.setDate(nextEndsAt.getDate() + (billingCycle === 'yearly' ? 365 : 30));
 
-  if (target === 'worker') {
-    const worker = await prisma.user.findUnique({ where: { id: req.auth!.userId } });
-    if (!worker) return res.status(404).json({ message: 'User not found' });
+  const worker = await prisma.user.findUnique({ where: { id: req.auth!.userId } });
+  if (!worker) return res.status(404).json({ message: 'User not found' });
 
-    await prisma.user.update({
-      where: { id: req.auth!.userId },
-      data: {
-        listingType: planMeta.listingType,
-        subscriptionPlan: planMeta.subscriptionPlan,
-        subscriptionEndsAt: nextEndsAt,
-        isVerifiedPlus: planMeta.isVerifiedPlus,
-        isPriorityBoosted: planMeta.isPriorityBoosted
-      } as any
-    });
-  } else {
-    const business = await (prisma as any).business.findFirst({ where: { vendorUserId: req.auth!.userId } });
-    if (!business) return res.status(404).json({ message: 'Business not found' });
-
-    await (prisma as any).business.update({
-      where: { id: business.id },
-      data: {
-        listingType: planMeta.listingType,
-        subscriptionPlan: planMeta.subscriptionPlan,
-        subscriptionEndsAt: nextEndsAt
-      }
-    });
-    await prisma.user.update({
-      where: { id: req.auth!.userId },
-      data: {
-        isVerifiedPlus: planMeta.isVerifiedPlus,
-        isPriorityBoosted: planMeta.isPriorityBoosted
-      }
-    });
-  }
+  await prisma.user.update({
+    where: { id: req.auth!.userId },
+    data: {
+      listingType: planMeta.listingType,
+      subscriptionPlan: planMeta.subscriptionPlan,
+      subscriptionEndsAt: nextEndsAt,
+      isVerifiedPlus: planMeta.isVerifiedPlus,
+      isPriorityBoosted: planMeta.isPriorityBoosted
+    } as any
+  });
 
   return res.json({
     message: 'Payment verified and subscription activated',
@@ -187,4 +166,3 @@ router.post('/verify', requireAuth, async (req: AuthRequest, res) => {
 });
 
 export default router;
-

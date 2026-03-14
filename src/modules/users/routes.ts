@@ -495,56 +495,7 @@ router.get('/worker/reviews', requireAuth, requireRole('worker'), async (req: Au
 });
 
 router.get('/me/favorites', requireAuth, requireRole('customer'), async (req: AuthRequest, res) => {
-  const favorites = await (prisma as any).favoriteBusiness.findMany({
-    where: { customerId: req.auth!.userId },
-    include: {
-      business: {
-        include: {
-          category: true,
-          vendor: { select: { id: true, name: true, phone: true, profilePhotoUrl: true, isVerifiedPlus: true } },
-          photos: { orderBy: { sortOrder: 'asc' }, take: 1 },
-          services: { where: { isActive: true }, orderBy: { createdAt: 'asc' }, take: 3 }
-        }
-      }
-    },
-    orderBy: { createdAt: 'desc' }
-  });
-
-  return res.json({
-    favorites: favorites.map((item: any) => ({
-      id: item.id,
-      savedAt: new Date(item.createdAt).toISOString(),
-      business: {
-        id: item.business.id,
-        name: item.business.name,
-        city: item.business.city,
-        locationText: item.business.locationText,
-        coverPhotoUrl: item.business.coverPhotoUrl || item.business.photos?.[0]?.url || '',
-        avgRating: item.business.avgRating,
-        totalReviews: item.business.totalReviews,
-        category: item.business.category
-          ? {
-              id: item.business.category.id,
-              name: item.business.category.name,
-              slug: item.business.category.slug
-            }
-          : null,
-        services: (item.business.services ?? []).map((service: any) => ({
-          id: service.id,
-          title: service.title,
-          priceFrom: service.priceFrom,
-          priceTo: service.priceTo
-        })),
-        vendor: {
-          id: item.business.vendor.id,
-          name: item.business.vendor.name,
-          phone: item.business.vendor.phone,
-          profilePhotoUrl: item.business.vendor.profilePhotoUrl || '',
-          isVerified: Boolean(item.business.vendor.isVerifiedPlus)
-        }
-      }
-    }))
-  });
+  return res.json({ favorites: [] });
 });
 
 export default router;

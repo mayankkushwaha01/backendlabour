@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: labourhub-backend
+    env: node
+    plan: free
+    region: singapore
+    buildCommand: npm install && npx prisma db push && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CORS_ORIGIN
+        sync: false
+      - key: MSG91_API_KEY
+        sync: false
+      - key: MSG91_TEMPLATE_ID
+        sync: false
+      - key: MSG91_SENDER_ID
+        sync: false

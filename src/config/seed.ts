@@ -76,40 +76,6 @@ export const seedData = async () => {
     });
   }
 
-  const generalCategory = await (prisma as any).category.findUnique({ where: { slug: 'general-services' } });
-  if (generalCategory) {
-    const workers = await prisma.user.findMany({
-      where: { role: 'worker', isApproved: true },
-      include: { workerProfile: true }
-    });
-    for (const worker of workers) {
-      const existingBusiness = await (prisma as any).business.findFirst({
-        where: { vendorUserId: worker.id }
-      });
-      if (existingBusiness) continue;
-
-      const profile: any = worker.workerProfile;
-      await (prisma as any).business.create({
-        data: {
-          vendorUserId: worker.id,
-          name: worker.name,
-          description: profile?.bio ?? '',
-          categoryId: generalCategory.id,
-          address: profile?.location ?? worker.address ?? '',
-          city: worker.city ?? '',
-          locationText: profile?.location ?? worker.city ?? '',
-          coverPhotoUrl: profile?.photoUrl || worker.profilePhotoUrl || '',
-          isApproved: Boolean(worker.isApproved),
-          avgRating: Number(profile?.rating ?? 0),
-          totalReviews: Number(profile?.totalJobs ?? 0),
-          listingType: (worker as any).listingType ?? 'free',
-          subscriptionPlan: (worker as any).subscriptionPlan ?? 'none',
-          subscriptionEndsAt: (worker as any).subscriptionEndsAt ?? null
-        }
-      });
-    }
-  }
-
   if (!env.seedDefaultAdmin) {
     return;
   }

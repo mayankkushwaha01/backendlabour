@@ -6,16 +6,10 @@ const router = Router();
 
 router.get('/', requireAuth, async (req: AuthRequest, res) => {
   const userId = req.auth!.userId;
-  const [currentUser, approvedBusinesses, completedBookings, workerPendingBookings, leadAcceptedByWorkers, broadcasts] = await Promise.all([
+  const [currentUser, completedBookings, workerPendingBookings, leadAcceptedByWorkers, broadcasts] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, role: true, isApproved: true, updatedAt: true }
-    }),
-    (prisma as any).business.findMany({
-      where: { vendorUserId: userId, isApproved: true },
-      select: { id: true, name: true, updatedAt: true },
-      orderBy: { updatedAt: 'desc' },
-      take: 50
     }),
     (prisma as any).booking.findMany({
       where: { customerId: userId, status: 'completed' },
@@ -55,15 +49,6 @@ router.get('/', requireAuth, async (req: AuthRequest, res) => {
     `
       .catch(() => [])
   ]);
-
-  const businessNotifications = approvedBusinesses.map((business: any) => ({
-    id: `business-approved-${business.id}`,
-    type: 'business_approved',
-    title: 'Business Approved',
-    message: `${business.name} is now approved and visible to customers.`,
-    createdAt: new Date(business.updatedAt).toISOString(),
-    businessId: business.id
-  }));
 
   const bookingNotifications = completedBookings
     .filter((booking: any) => booking.completedAt)
@@ -127,7 +112,6 @@ router.get('/', requireAuth, async (req: AuthRequest, res) => {
   const notifications = [
     ...broadcastNotifications,
     ...workerApprovalNotifications,
-    ...businessNotifications,
     ...bookingNotifications,
     ...workerBookingNotifications,
     ...leadNotifications
