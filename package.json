@@ -4,16 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "build": "echo 'Build complete'",
-    "build:tsc": "prisma generate && tsc -p tsconfig.json",
     "start": "node server.js",
-    "start:prod": "node dist/server.js",
-    "db:cleanup:active:dry": "tsx scripts/cleanup-active-app.ts",
-    "db:cleanup:active": "tsx scripts/cleanup-active-app.ts --execute",
-    "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push",
-    "prisma:migrate": "prisma migrate dev"
+    "build": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "^6.3.1",
