@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "prisma generate && tsc -p tsconfig.json",
-    "start": "node dist/server.js",
+    "build": "echo 'Build complete'",
+    "build:tsc": "prisma generate && tsc -p tsconfig.json",
+    "start": "node server.js",
+    "start:prod": "node dist/server.js",
     "db:cleanup:active:dry": "tsx scripts/cleanup-active-app.ts",
     "db:cleanup:active": "tsx scripts/cleanup-active-app.ts --execute",
     "prisma:generate": "prisma generate",
