@@ -90,13 +90,13 @@ model User {
   email         String          @unique
   phone         String          @unique
   profilePhotoUrl String        @db.LongText
-  city          String          @default("")
-  address       String          @default("")
+  city          String          
+  address       String          
   phoneVerified Boolean         @default(false)
   isVerifiedPlus Boolean        @default(false)
   isPriorityBoosted Boolean     @default(false)
   isComplaintFlagged Boolean    @default(false)
-  complaintFlagNote String      @default("")
+  complaintFlagNote String      
   listingType    ListingType    @default(free)
   subscriptionPlan SubscriptionPlan @default(none)
   subscriptionEndsAt DateTime?
@@ -127,7 +127,7 @@ model WorkerProfile {
   id                 String   @id @default(cuid())
   userId             String   @unique
   photoUrl           String   @db.LongText
-  location           String   @default("")
+  location           String   
   isOnDuty           Boolean  @default(true)
   skills             Json
   serviceAreas       Json?
@@ -135,13 +135,13 @@ model WorkerProfile {
   portfolioVideoUrls Json?
   certifications     Json?
   responseTimeMins   Int      @default(30)
-  workingHours       String   @default("")
+  workingHours       String   
   priceFrom          Float    @default(0)
   priceTo            Float    @default(0)
   experienceYears    Int      @default(0)
-  bio                String   @default("")
-  aadhaarNumberMasked String  @default("")
-  aadhaarCardUrl     String   @default("") @db.LongText
+  bio                String   
+  aadhaarNumberMasked String  
+  aadhaarCardUrl     String    @db.LongText
   pricePerHour       Float    @default(0)
   rating             Float    @default(0)
   totalJobs          Int      @default(0)
@@ -226,7 +226,7 @@ model Booking {
   startedAt     DateTime?
   completedAt   DateTime?
   cancelledAt   DateTime?
-  cancellationReason String   @default("")
+  cancellationReason String   
   rescheduleCount Int         @default(0)
   lastRescheduledAt DateTime?
   workerLiveLat Float?
@@ -281,7 +281,7 @@ model LeadQuote {
   leadId     String
   workerId   String
   amount     Float
-  message    String          @default("")
+  message    String          
   etaHours   Int             @default(24)
   status     LeadQuoteStatus @default(sent)
   createdAt  DateTime        @default(now())
@@ -311,7 +311,7 @@ model Category {
   id         String    @id @default(cuid())
   name       String
   slug       String    @unique
-  icon       String    @default("")
+  icon       String    
   isActive   Boolean   @default(true)
   sortOrder  Int       @default(0)
   createdAt  DateTime  @default(now())
@@ -323,14 +323,14 @@ model Business {
   id                String           @id @default(cuid())
   vendorUserId      String
   name              String
-  description       String           @default("")
+  description       String           
   categoryId        String
-  address           String           @default("")
-  city              String           @default("")
-  locationText      String           @default("")
+  address           String           
+  city              String           
+  locationText      String           
   lat               Float?
   lng               Float?
-  coverPhotoUrl     String           @default("") @db.LongText
+  coverPhotoUrl     String            @db.LongText
   isApproved        Boolean          @default(false)
   avgRating         Float            @default(0)
   totalReviews      Int              @default(0)
@@ -358,7 +358,7 @@ model BusinessPhoto {
   id        String   @id @default(cuid())
   businessId String
   url       String   @db.LongText
-  caption   String   @default("")
+  caption   String   
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
