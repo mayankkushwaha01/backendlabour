@@ -89,7 +89,7 @@ model User {
   name          String
   email         String          @unique
   phone         String          @unique
-  profilePhotoUrl String        @default("") @db.LongText
+  profilePhotoUrl String        @db.LongText
   city          String          @default("")
   address       String          @default("")
   phoneVerified Boolean         @default(false)
