@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "build": "prisma generate"
+    "start": "npx prisma db push && node server.js"
   },
   "dependencies": {
     "@prisma/client": "^6.3.1",
