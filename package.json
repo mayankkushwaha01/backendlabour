@@ -7,11 +7,11 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "npx prisma generate",
+    "build": "npm install --include=dev && npx prisma generate",
     "start": "npx prisma db push && npx tsx src/server.ts"
   },
   "dependencies": {
-    "tsx": "^4.19.1",
+    "tsx": "4.19.1",
     "@prisma/client": "6.3.1",
     "bcryptjs": "^2.4.3",
     "compression": "^1.7.4",
@@ -34,3 +34,12 @@
     "typescript": "^5.6.2"
   }
 }
+```
+
+---
+
+## Kya Badla:
+```
+✅ build script mein npm install --include=dev add kiya
+✅ tsx ka ^ hata diya — exact version 4.19.1
+✅ start script same rakha

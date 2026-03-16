@@ -1,16 +1,15 @@
-FROM node:22-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm install
+RUN npm install --include=dev
 
 COPY . .
 
 RUN npx prisma generate
 
-EXPOSE 5000
+EXPOSE 8080
 
-# prisma db push deploy time pe hoga, build time pe nahi
-CMD ["sh", "-c", "npx prisma db push && npm start"]
+CMD ["sh", "-c", "npx prisma db push && npx tsx src/server.ts"]
