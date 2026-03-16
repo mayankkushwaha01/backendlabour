@@ -126,7 +126,7 @@ model User {
 model WorkerProfile {
   id                 String   @id @default(cuid())
   userId             String   @unique
-  photoUrl           String   @default("") @db.LongText
+  photoUrl           String   @db.LongText
   location           String   @default("")
   isOnDuty           Boolean  @default(true)
   skills             Json
@@ -247,7 +247,7 @@ model Review {
   workerId   String
   rating     Int
   comment    String
-  photoUrl   String   @default("") @db.LongText
+  photoUrl   String   @db.LongText
   tags       Json?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
