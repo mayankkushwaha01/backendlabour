@@ -7,8 +7,9 @@ const start = async () => {
   await connectDb();
   await seedData();
 
-  app.listen(env.port, () => {
-    console.log(`API running on http://localhost:${env.port}`);
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
   });
 };
 
