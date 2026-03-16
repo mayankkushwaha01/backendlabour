@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "npx prisma db push && node src/server.js"
+    "build": "npx tsc",
+    "start": "npx prisma db push && node dist/server.js"
   },
   "dependencies": {
     "@prisma/client": "^6.3.1",
