@@ -5,7 +5,7 @@
 buildCommand = "npm install --include=dev && npx prisma generate"
 
 [deploy]
-startCommand = "npx prisma db push && npx tsx src/server.ts"
+startCommand = "sh -c \"npx prisma db push && npx tsx src/server.ts\""
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 
