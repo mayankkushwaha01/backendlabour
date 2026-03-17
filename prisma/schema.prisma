@@ -105,7 +105,7 @@ model User {
   role          UserRole
   isApproved    Boolean         @default(false)
   createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  updatedAt DateTime @updatedAt
   workerProfile WorkerProfile?
   customerBookings Booking[]    @relation("CustomerBookings")
   workerBookings   Booking[]    @relation("WorkerBookings")
@@ -146,7 +146,7 @@ model WorkerProfile {
   rating             Float    @default(0)
   totalJobs          Int      @default(0)
   createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  updatedAt DateTime @updatedAt
   user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -163,7 +163,7 @@ model HomeBanner {
   isActive         Boolean  @default(true)
   sortOrder        Int      @default(0)
   createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  updatedAt DateTime @updatedAt
   updatedById      String?  @db.VarChar(191)
 
   @@map("HomeBanner")
@@ -178,7 +178,7 @@ model HomeHeroOffer {
   toneStart  String?  @db.VarChar(20)
   toneEnd    String?  @db.VarChar(20)
   isActive   Boolean  @default(true)
-  updatedAt  DateTime @updatedAt
+  updatedAt DateTime @updatedAt
   updatedById String? @db.VarChar(191)
 
   @@map("HomeHeroOffer")
@@ -192,7 +192,7 @@ model EmailOtp {
   expiresAt DateTime
   attempts  Int        @default(0)
   createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  updatedAt DateTime @updatedAt
 }
 
 model Service {
@@ -233,7 +233,7 @@ model Booking {
   workerLiveLng Float?
   workerLiveUpdatedAt DateTime?
   createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  updatedAt DateTime @updatedAt
   customer      User          @relation("CustomerBookings", fields: [customerId], references: [id], onDelete: Cascade)
   worker        User          @relation("WorkerBookings", fields: [workerId], references: [id], onDelete: Cascade)
   service       Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
@@ -250,7 +250,7 @@ model Review {
   photoUrl   String   @db.LongText
   tags       Json?
   createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  updatedAt DateTime @updatedAt
   booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   customer   User     @relation("CustomerReviews", fields: [customerId], references: [id], onDelete: Cascade)
   worker     User     @relation("WorkerReviews", fields: [workerId], references: [id], onDelete: Cascade)
@@ -269,7 +269,7 @@ model Lead {
   selectedWorkerId String?
   selectedQuoteId  String?
   createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  updatedAt DateTime @updatedAt
   customer         User            @relation("CustomerLeads", fields: [customerId], references: [id], onDelete: Cascade)
   selectedWorker   User?           @relation("HiredWorkerLeads", fields: [selectedWorkerId], references: [id], onDelete: SetNull)
   quotes           LeadQuote[]
@@ -285,7 +285,7 @@ model LeadQuote {
   etaHours   Int             @default(24)
   status     LeadQuoteStatus @default(sent)
   createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
+  updatedAt DateTime @updatedAt
   lead       Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
   worker     User            @relation("WorkerLeadQuotes", fields: [workerId], references: [id], onDelete: Cascade)
 
@@ -299,7 +299,7 @@ model LeadMessage {
   receiverId String
   message    String
   createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  updatedAt DateTime @updatedAt
   lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   sender     User     @relation("LeadMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
   receiver   User     @relation("LeadMessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
@@ -315,7 +315,7 @@ model Category {
   isActive   Boolean   @default(true)
   sortOrder  Int       @default(0)
   createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  updatedAt DateTime @updatedAt
   businesses Business[]
 }
 
@@ -338,7 +338,7 @@ model Business {
   subscriptionPlan  SubscriptionPlan @default(none)
   subscriptionEndsAt DateTime?
   createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  updatedAt DateTime @updatedAt
   vendor            User             @relation("VendorBusinesses", fields: [vendorUserId], references: [id], onDelete: Cascade)
   category          Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   photos            BusinessPhoto[]
@@ -402,7 +402,7 @@ model BusinessReview {
   photoUrl   String?  @db.LongText
   tags       Json?
   createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  updatedAt DateTime @updatedAt
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   customer   User     @relation("CustomerBusinessReviews", fields: [customerId], references: [id], onDelete: Cascade)
 
@@ -418,7 +418,7 @@ model Enquiry {
   message    String
   status     EnquiryStatus @default(open)
   createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
+  updatedAt DateTime @updatedAt
   business   Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
   customer   User?          @relation("CustomerEnquiries", fields: [customerId], references: [id], onDelete: SetNull)
 
@@ -459,7 +459,7 @@ model WhatsappOtp {
   attempts  Int        @default(0)
   purpose   OtpPurpose @default(login)
   createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  updatedAt DateTime @updatedAt
 
   @@index([phone, purpose])
 }
@@ -479,7 +479,7 @@ model Coupon {
   isActive       Boolean    @default(true)
   createdBy      String?
   createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  updatedAt DateTime @updatedAt
 
   @@index([code, isActive])
 }
@@ -491,7 +491,7 @@ model PricingItem {
   basePrice  Float
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 
   @@index([isActive])
 }
