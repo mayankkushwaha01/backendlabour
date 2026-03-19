@@ -23,13 +23,21 @@ app.disable('x-powered-by');
 app.use(compression());
 const normalizeOrigin = (value: string) => value.trim().replace(/\/$/, '').toLowerCase();
 const allowedOrigins = new Set(env.corsOrigins.map(normalizeOrigin));
+const isLocalhostOrigin = (origin: string) => {
+  try {
+    const url = new URL(origin);
+    return url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+};
 
 if (env.corsOrigins.length === 0) {
   app.use(cors());
 } else {
   app.use(cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.has(normalizeOrigin(origin))) {
+      if (!origin || allowedOrigins.has(normalizeOrigin(origin)) || isLocalhostOrigin(origin)) {
         callback(null, true);
         return;
       }
