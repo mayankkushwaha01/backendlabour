@@ -51,7 +51,7 @@ const signupSchema = z.object({
   name: z.string().min(2),
   email: z.string().email().transform((value) => value.trim().toLowerCase()).optional(),
   phone: z.string().min(8),
-  phoneOtpCode: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits'),
+  phoneOtpCode: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits').optional(),
   password: z.string().min(6),
   role: z.enum(['customer', 'worker']),
   profilePhotoUrl: z.string().url().or(z.string().regex(dataUrlImageRegex)).or(z.literal('')).optional(),
@@ -402,25 +402,33 @@ router.post('/signup', async (req, res) => {
     return res.status(409).json({ message: 'Phone number already registered' });
   }
 
-  const otpRecord = await (prisma as any).whatsappOtp.findFirst({
-    where: { phone, purpose: 'signup' },
-    orderBy: { createdAt: 'desc' }
-  });
-  if (!otpRecord) {
-    return res.status(400).json({ message: 'Please request phone OTP first' });
-  }
-
-  if (otpRecord.expiresAt.getTime() < Date.now()) {
-    return res.status(400).json({ message: 'OTP expired. Please request a new OTP' });
-  }
-
-  const validOtp = await bcrypt.compare(phoneOtpCode, otpRecord.otpHash);
-  if (!validOtp) {
-    await (prisma as any).whatsappOtp.update({
-      where: { id: otpRecord.id },
-      data: { attempts: { increment: 1 } }
+  let phoneVerified = false;
+  if (phoneOtpCode) {
+    const otpRecord = await (prisma as any).whatsappOtp.findFirst({
+      where: { phone, purpose: 'signup' },
+      orderBy: { createdAt: 'desc' }
     });
-    return res.status(400).json({ message: 'Invalid OTP' });
+    if (!otpRecord) {
+      return res.status(400).json({ message: 'Please request phone OTP first' });
+    }
+
+    if (otpRecord.expiresAt.getTime() < Date.now()) {
+      return res.status(400).json({ message: 'OTP expired. Please request a new OTP' });
+    }
+
+    const validOtp = await bcrypt.compare(phoneOtpCode, otpRecord.otpHash);
+    if (!validOtp) {
+      await (prisma as any).whatsappOtp.update({
+        where: { id: otpRecord.id },
+        data: { attempts: { increment: 1 } }
+      });
+      return res.status(400).json({ message: 'Invalid OTP' });
+    }
+
+    phoneVerified = true;
+    await (prisma as any).whatsappOtp.delete({ where: { id: otpRecord.id } });
+  } else if (role === 'worker') {
+    return res.status(400).json({ message: 'Phone OTP is required for worker signup' });
   }
 
   const normalizedAadhaar = role === 'worker' ? normalizeAadhaar(aadhaarNumber ?? '') : '';
@@ -437,14 +445,12 @@ router.post('/signup', async (req, res) => {
       phone,
       profilePhotoUrl: parsed.data.profilePhotoUrl?.trim() || '',
       city: 'Prayagraj',
-      phoneVerified: false,
+      phoneVerified,
       passwordHash,
       role: role as UserRole,
       isApproved: role === 'customer'
     }
   });
-
-  await (prisma as any).whatsappOtp.delete({ where: { id: otpRecord.id } });
 
   return res.status(201).json({ message: 'Signup successful. Worker accounts require admin approval.' });
 });
