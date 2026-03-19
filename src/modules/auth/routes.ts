@@ -310,8 +310,12 @@ const verifyPhoneOtp = async (req: any, res: any) => {
         name,
         email: `${phone}@mobile.labourhub.local`,
         phone,
+        profilePhotoUrl: '',
+        city: 'Prayagraj',
+        address: '',
         passwordHash,
         phoneVerified: true,
+        complaintFlagNote: '',
         role,
         isApproved: role === 'customer'
       }
@@ -445,8 +449,10 @@ router.post('/signup', async (req, res) => {
       phone,
       profilePhotoUrl: parsed.data.profilePhotoUrl?.trim() || '',
       city: 'Prayagraj',
+      address: '',
       phoneVerified,
       passwordHash,
+      complaintFlagNote: '',
       role: role as UserRole,
       isApproved: role === 'customer'
     }
