@@ -155,90 +155,100 @@ const seedDefaultHeroOffer = async () => {
 };
 
 router.get('/public', cacheResponse(60_000), async (_req, res) => {
-  await ensureHomeBannerTable();
-  await seedDefaultHomeBanners();
-  const rows = await prisma.$queryRaw<
-    Array<{
-      id: string;
-      bannerKey: string;
-      title: string;
-      subtitle: string;
-      highlightText: string;
-      imageUrl: string;
-      targetServiceKey: string | null;
-      toneStart: string | null;
-      toneEnd: string | null;
-      isActive: number | boolean;
-      sortOrder: number;
-      updatedAt: Date;
-    }>
-  >`
-    SELECT id, bannerKey, title, subtitle, highlightText, imageUrl, targetServiceKey, toneStart, toneEnd, isActive, sortOrder, updatedAt
-    FROM HomeBanner
-    WHERE isActive = TRUE
-    ORDER BY sortOrder ASC, updatedAt DESC
-    LIMIT 12
-  `;
+  try {
+    await ensureHomeBannerTable();
+    await seedDefaultHomeBanners();
+    const rows = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        bannerKey: string;
+        title: string;
+        subtitle: string;
+        highlightText: string;
+        imageUrl: string;
+        targetServiceKey: string | null;
+        toneStart: string | null;
+        toneEnd: string | null;
+        isActive: number | boolean;
+        sortOrder: number;
+        updatedAt: Date;
+      }>
+    >`
+      SELECT id, bannerKey, title, subtitle, highlightText, imageUrl, targetServiceKey, toneStart, toneEnd, isActive, sortOrder, updatedAt
+      FROM HomeBanner
+      WHERE isActive = TRUE
+      ORDER BY sortOrder ASC, updatedAt DESC
+      LIMIT 12
+    `;
 
-  return res.json({
-    banners: rows.map((row) => ({
-      id: row.id,
-      bannerKey: row.bannerKey,
-      title: row.title,
-      subtitle: row.subtitle,
-      highlightText: row.highlightText,
-      imageUrl: row.imageUrl,
-      targetServiceKey: row.targetServiceKey,
-      toneStart: row.toneStart || '#6C4DFF',
-      toneEnd: row.toneEnd || '#8F76FF',
-      sortOrder: Number(row.sortOrder ?? 0),
-      updatedAt: new Date(row.updatedAt).toISOString()
-    }))
-  });
+    return res.json({
+      banners: rows.map((row) => ({
+        id: row.id,
+        bannerKey: row.bannerKey,
+        title: row.title,
+        subtitle: row.subtitle,
+        highlightText: row.highlightText,
+        imageUrl: row.imageUrl,
+        targetServiceKey: row.targetServiceKey,
+        toneStart: row.toneStart || '#6C4DFF',
+        toneEnd: row.toneEnd || '#8F76FF',
+        sortOrder: Number(row.sortOrder ?? 0),
+        updatedAt: new Date(row.updatedAt).toISOString()
+      }))
+    });
+  } catch (error) {
+    console.error('home-banners/public failed', error);
+    return res.json({ banners: [] });
+  }
 });
 
 router.get('/offer/public', cacheResponse(60_000), async (_req, res) => {
-  await ensureHomeHeroOfferTable();
-  await seedDefaultHeroOffer();
+  try {
+    await ensureHomeHeroOfferTable();
+    await seedDefaultHeroOffer();
 
-  const rows = await prisma.$queryRaw<
-    Array<{
-      id: string;
-      offerText: string;
-      subtitle: string;
-      couponCode: string | null;
-      toneStart: string | null;
-      toneEnd: string | null;
-      isActive: number | boolean;
-      updatedAt: Date;
-    }>
-  >`SELECT id, offerText, subtitle, couponCode, toneStart, toneEnd, isActive, updatedAt FROM HomeHeroOffer ORDER BY updatedAt DESC LIMIT 1`;
-  const row = rows[0];
-  if (!row || !Boolean(row.isActive)) {
+    const rows = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        offerText: string;
+        subtitle: string;
+        couponCode: string | null;
+        toneStart: string | null;
+        toneEnd: string | null;
+        isActive: number | boolean;
+        updatedAt: Date;
+      }>
+    >`SELECT id, offerText, subtitle, couponCode, toneStart, toneEnd, isActive, updatedAt FROM HomeHeroOffer ORDER BY updatedAt DESC LIMIT 1`;
+    const row = rows[0];
+    if (!row || !Boolean(row.isActive)) {
+      return res.json({ offer: null });
+    }
+
+    const runningCoupon = await resolveRunningCoupon(row.couponCode);
+    const offerText =
+      row.offerText?.trim() ||
+      (runningCoupon
+        ? runningCoupon.type === 'percent'
+          ? `${Math.round(Number(runningCoupon.value || 0))}% OFF`
+          : `₹${Math.round(Number(runningCoupon.value || 0))} OFF`
+        : 'Special Offer');
+
+    return res.json({
+      offer: {
+        id: row.id,
+        offerText,
+        subtitle: row.subtitle || 'On selected services',
+        couponCode: runningCoupon?.code || null,
+        couponTitle: runningCoupon?.title || null,
+        toneStart: row.toneStart || '#7B2FF7',
+        toneEnd: row.toneEnd || '#9F5BFF',
+        updatedAt: new Date(row.updatedAt).toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('home-banners/offer/public failed', error);
     return res.json({ offer: null });
   }
-
-  const runningCoupon = await resolveRunningCoupon(row.couponCode);
-  const offerText =
-    row.offerText?.trim() ||
-    (runningCoupon
-      ? runningCoupon.type === 'percent'
-        ? `${Math.round(Number(runningCoupon.value || 0))}% OFF`
-        : `₹${Math.round(Number(runningCoupon.value || 0))} OFF`
-      : 'Special Offer');
-
-  return res.json({
-    offer: {
-      id: row.id,
-      offerText,
-      subtitle: row.subtitle || 'On selected services',
-      couponCode: runningCoupon?.code || null,
-      couponTitle: runningCoupon?.title || null,
-      toneStart: row.toneStart || '#7B2FF7',
-      toneEnd: row.toneEnd || '#9F5BFF',
-      updatedAt: new Date(row.updatedAt).toISOString()
-    }
-  });
 });
 
 export default router;

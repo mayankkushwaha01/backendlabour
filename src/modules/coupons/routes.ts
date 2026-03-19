@@ -43,31 +43,36 @@ const isCouponRunning = (coupon: any, now: Date) => {
 };
 
 router.get('/available', cacheResponse(30_000), async (_req, res) => {
-  const now = new Date();
-  const coupons = await (prisma as any).coupon.findMany({
-    where: {
-      isActive: true,
-      AND: [
-        { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
-        { OR: [{ endsAt: null }, { endsAt: { gte: now } }] }
-      ]
-    },
-    orderBy: { createdAt: 'desc' }
-  });
+  try {
+    const now = new Date();
+    const coupons = await (prisma as any).coupon.findMany({
+      where: {
+        isActive: true,
+        AND: [
+          { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+          { OR: [{ endsAt: null }, { endsAt: { gte: now } }] }
+        ]
+      },
+      orderBy: { createdAt: 'desc' }
+    });
 
-  const available = coupons.filter((coupon: any) => isCouponRunning(coupon, now));
+    const available = coupons.filter((coupon: any) => isCouponRunning(coupon, now));
 
-  return res.json({
-    coupons: available.map((coupon: any) => ({
-      id: coupon.id,
-      code: coupon.code,
-      title: coupon.title,
-      type: coupon.type,
-      value: coupon.value,
-      minOrderAmount: coupon.minOrderAmount,
-      maxDiscount: coupon.maxDiscount
-    }))
-  });
+    return res.json({
+      coupons: available.map((coupon: any) => ({
+        id: coupon.id,
+        code: coupon.code,
+        title: coupon.title,
+        type: coupon.type,
+        value: coupon.value,
+        minOrderAmount: coupon.minOrderAmount,
+        maxDiscount: coupon.maxDiscount
+      }))
+    });
+  } catch (error) {
+    console.error('coupons/available failed', error);
+    return res.json({ coupons: [] });
+  }
 });
 
 router.post('/validate', async (req, res) => {

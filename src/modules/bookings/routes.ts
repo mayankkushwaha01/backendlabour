@@ -169,44 +169,49 @@ router.post('/', requireAuth, requireRole('customer'), async (req: AuthRequest, 
 });
 
 router.get('/my', requireAuth, async (req: AuthRequest, res) => {
-  const where: any = req.auth!.role === 'customer'
-    ? { customerId: req.auth!.userId }
-    : req.auth!.role === 'worker'
-      ? { workerId: req.auth!.userId }
-      : {};
+  try {
+    const where: any = req.auth!.role === 'customer'
+      ? { customerId: req.auth!.userId }
+      : req.auth!.role === 'worker'
+        ? { workerId: req.auth!.userId }
+        : {};
 
-  const bookings = await (prisma as any).booking.findMany({
-    where,
-    include: {
-      customer: {
-        select: { id: true, name: true, email: true, phone: true }
+    const bookings = await (prisma as any).booking.findMany({
+      where,
+      include: {
+        customer: {
+          select: { id: true, name: true, email: true, phone: true }
+        },
+        worker: {
+          select: { id: true, name: true, email: true, phone: true }
+        },
+        service: {
+          select: { id: true, name: true, basePrice: true }
+        }
       },
-      worker: {
-        select: { id: true, name: true, email: true, phone: true }
-      },
-      service: {
-        select: { id: true, name: true, basePrice: true }
-      }
-    },
-    orderBy: { createdAt: 'desc' }
-  });
-  return res.json({
-    bookings: bookings.map((b: any) => {
-      const base = serializeBooking(b);
-      const hideWorker = req.auth!.role === 'customer' && String(b.status || '').toLowerCase() === 'pending';
-      return {
-        ...base,
-        customerName: b.customer?.name ?? '',
-        customerEmail: b.customer?.email ?? '',
-        customerPhone: b.customer?.phone ?? b.customerPhone,
-        workerId: hideWorker ? '' : base.workerId,
-        workerName: hideWorker ? '' : b.worker?.name ?? '',
-        workerEmail: hideWorker ? '' : b.worker?.email ?? '',
-        serviceName: b.service?.name ?? ''
-      };
-    }),
-    cancellationPolicy: CANCELLATION_POLICY
-  });
+      orderBy: { createdAt: 'desc' }
+    });
+    return res.json({
+      bookings: bookings.map((b: any) => {
+        const base = serializeBooking(b);
+        const hideWorker = req.auth!.role === 'customer' && String(b.status || '').toLowerCase() === 'pending';
+        return {
+          ...base,
+          customerName: b.customer?.name ?? '',
+          customerEmail: b.customer?.email ?? '',
+          customerPhone: b.customer?.phone ?? b.customerPhone,
+          workerId: hideWorker ? '' : base.workerId,
+          workerName: hideWorker ? '' : b.worker?.name ?? '',
+          workerEmail: hideWorker ? '' : b.worker?.email ?? '',
+          serviceName: b.service?.name ?? ''
+        };
+      }),
+      cancellationPolicy: CANCELLATION_POLICY
+    });
+  } catch (error) {
+    console.error('bookings/my failed', error);
+    return res.status(500).json({ message: 'Unable to fetch bookings' });
+  }
 });
 
 router.post('/:bookingId/accept', requireAuth, requireRole('worker'), async (req: AuthRequest, res) => {
