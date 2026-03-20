@@ -90,12 +90,17 @@ export const seedData = async () => {
     const passwordHash = await bcrypt.hash(adminPassword, 10);
     await prisma.user.create({
       data: {
-      name: 'Platform Admin',
-      email: env.adminSeedEmail,
-      phone: '0000000000',
-      passwordHash,
-      role: 'admin',
-      isApproved: true
+        name: 'Platform Admin',
+        email: env.adminSeedEmail,
+        phone: '0000000000',
+        profilePhotoUrl: '',
+        city: 'Prayagraj',
+        address: '',
+        complaintFlagNote: '',
+        phoneVerified: true,
+        passwordHash,
+        role: 'admin',
+        isApproved: true
       }
     });
   }
