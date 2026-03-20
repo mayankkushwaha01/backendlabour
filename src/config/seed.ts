@@ -80,14 +80,15 @@ export const seedData = async () => {
     return;
   }
 
-  const admin = await prisma.user.findUnique({ where: { email: env.adminSeedEmail } });
-  if (!admin) {
-    const adminPassword = env.adminSeedPassword || (env.nodeEnv === 'production' ? '' : 'admin123');
-    if (!adminPassword) {
-      throw new Error('ADMIN_SEED_PASSWORD is required when SEED_DEFAULT_ADMIN is enabled in production');
-    }
+  const adminPassword = env.adminSeedPassword || (env.nodeEnv === 'production' ? '' : 'admin123');
+  if (!adminPassword) {
+    throw new Error('ADMIN_SEED_PASSWORD is required when SEED_DEFAULT_ADMIN is enabled in production');
+  }
 
-    const passwordHash = await bcrypt.hash(adminPassword, 10);
+  const passwordHash = await bcrypt.hash(adminPassword, 10);
+  const admin = await prisma.user.findUnique({ where: { email: env.adminSeedEmail } });
+
+  if (!admin) {
     await prisma.user.create({
       data: {
         name: 'Platform Admin',
@@ -103,5 +104,21 @@ export const seedData = async () => {
         isApproved: true
       }
     });
+    return;
   }
+
+  await prisma.user.update({
+    where: { email: env.adminSeedEmail },
+    data: {
+      name: admin.name || 'Platform Admin',
+      profilePhotoUrl: admin.profilePhotoUrl || '',
+      city: admin.city || 'Prayagraj',
+      address: admin.address || '',
+      complaintFlagNote: admin.complaintFlagNote || '',
+      passwordHash,
+      role: 'admin',
+      isApproved: true,
+      phoneVerified: true
+    }
+  });
 };
