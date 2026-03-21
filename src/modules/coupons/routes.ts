@@ -42,6 +42,14 @@ const isCouponRunning = (coupon: any, now: Date) => {
   return true;
 };
 
+const handleCouponRouteError = (res: any, routeKey: string, error: unknown) => {
+  console.error(`coupon route failed: ${routeKey}`, error);
+  return res.status(500).json({
+    message: 'Coupon request failed',
+    route: routeKey
+  });
+};
+
 router.get('/available', cacheResponse(30_000), async (_req, res) => {
   try {
     const now = new Date();
@@ -136,8 +144,12 @@ router.post('/redeem', requireAuth, async (req, res) => {
 });
 
 router.get('/admin/list', requireAuth, requireRole('admin'), async (_req, res) => {
-  const coupons = await (prisma as any).coupon.findMany({ orderBy: { createdAt: 'desc' } });
-  return res.json({ coupons });
+  try {
+    const coupons = await (prisma as any).coupon.findMany({ orderBy: { createdAt: 'desc' } });
+    return res.json({ coupons });
+  } catch (error) {
+    return handleCouponRouteError(res, 'admin/list', error);
+  }
 });
 
 router.post('/admin/create', requireAuth, requireRole('admin'), async (req, res) => {

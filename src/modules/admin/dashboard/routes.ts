@@ -171,6 +171,14 @@ const isCouponRunning = (coupon: {
   return true;
 };
 
+const handleAdminRouteError = (res: any, routeKey: string, error: unknown) => {
+  console.error(`admin dashboard route failed: ${routeKey}`, error);
+  return res.status(500).json({
+    message: 'Admin request failed',
+    route: routeKey
+  });
+};
+
 const serializeWorker = (u: any) => {
   const profile = u.workerProfile;
   return {
@@ -222,16 +230,20 @@ const serializeWorker = (u: any) => {
 };
 
 router.get('/workers/pending', requireAuth, requireRole('admin'), async (_req, res) => {
-  const pendingUsers = await prisma.user.findMany({
-    where: { isApproved: false },
-    include: { workerProfile: true }
-  });
+  try {
+    const pendingUsers = await prisma.user.findMany({
+      where: { isApproved: false },
+      include: { workerProfile: true }
+    });
 
-  const pending = pendingUsers.filter((u: any) => u.role === 'worker' || Boolean(u.workerProfile));
+    const pending = pendingUsers.filter((u: any) => u.role === 'worker' || Boolean(u.workerProfile));
 
-  return res.json({
-    pendingWorkers: pending.map(serializeWorker)
-  });
+    return res.json({
+      pendingWorkers: pending.map(serializeWorker)
+    });
+  } catch (error) {
+    return handleAdminRouteError(res, 'workers/pending', error);
+  }
 });
 
 router.post('/notifications/broadcast', requireAuth, requireRole('admin'), async (req: any, res) => {
@@ -259,184 +271,200 @@ router.post('/notifications/broadcast', requireAuth, requireRole('admin'), async
 });
 
 router.get('/home-banners', requireAuth, requireRole('admin'), async (_req, res) => {
-  await ensureHomeBannerTable();
-  await seedDefaultHomeBanners();
-  const rows = await prisma.$queryRaw<
-    Array<{
-      id: string;
-      bannerKey: string;
-      title: string;
-      subtitle: string;
-      highlightText: string;
-      imageUrl: string;
-      targetServiceKey: string | null;
-      toneStart: string | null;
-      toneEnd: string | null;
-      isActive: number | boolean;
-      sortOrder: number;
-      updatedAt: Date;
-      createdAt: Date;
-    }>
-  >`
-    SELECT id, bannerKey, title, subtitle, highlightText, imageUrl, targetServiceKey, toneStart, toneEnd, isActive, sortOrder, updatedAt, createdAt
-    FROM HomeBanner
-    ORDER BY sortOrder ASC, updatedAt DESC
-    LIMIT 100
-  `;
+  try {
+    await ensureHomeBannerTable();
+    await seedDefaultHomeBanners();
+    const rows = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        bannerKey: string;
+        title: string;
+        subtitle: string;
+        highlightText: string;
+        imageUrl: string;
+        targetServiceKey: string | null;
+        toneStart: string | null;
+        toneEnd: string | null;
+        isActive: number | boolean;
+        sortOrder: number;
+        updatedAt: Date;
+        createdAt: Date;
+      }>
+    >`
+      SELECT id, bannerKey, title, subtitle, highlightText, imageUrl, targetServiceKey, toneStart, toneEnd, isActive, sortOrder, updatedAt, createdAt
+      FROM HomeBanner
+      ORDER BY sortOrder ASC, updatedAt DESC
+      LIMIT 100
+    `;
 
-  return res.json({
-    banners: rows.map((row) => ({
-      id: row.id,
-      bannerKey: row.bannerKey,
-      title: row.title,
-      subtitle: row.subtitle,
-      highlightText: row.highlightText,
-      imageUrl: row.imageUrl,
-      targetServiceKey: row.targetServiceKey,
-      toneStart: row.toneStart || '#6C4DFF',
-      toneEnd: row.toneEnd || '#8F76FF',
-      isActive: Boolean(row.isActive),
-      sortOrder: Number(row.sortOrder ?? 0),
-      updatedAt: new Date(row.updatedAt).toISOString(),
-      createdAt: new Date(row.createdAt).toISOString()
-    }))
-  });
+    return res.json({
+      banners: rows.map((row) => ({
+        id: row.id,
+        bannerKey: row.bannerKey,
+        title: row.title,
+        subtitle: row.subtitle,
+        highlightText: row.highlightText,
+        imageUrl: row.imageUrl,
+        targetServiceKey: row.targetServiceKey,
+        toneStart: row.toneStart || '#6C4DFF',
+        toneEnd: row.toneEnd || '#8F76FF',
+        isActive: Boolean(row.isActive),
+        sortOrder: Number(row.sortOrder ?? 0),
+        updatedAt: new Date(row.updatedAt).toISOString(),
+        createdAt: new Date(row.createdAt).toISOString()
+      }))
+    });
+  } catch (error) {
+    return handleAdminRouteError(res, 'home-banners', error);
+  }
 });
 
 router.get('/home-offer', requireAuth, requireRole('admin'), async (_req, res) => {
-  await ensureHomeHeroOfferTable();
-  await seedDefaultHeroOffer();
-  const rows = await prisma.$queryRaw<
-    Array<{
-      id: string;
-      offerText: string;
-      subtitle: string;
-      couponCode: string | null;
-      toneStart: string | null;
-      toneEnd: string | null;
-      isActive: number | boolean;
-      updatedAt: Date;
-    }>
-  >`SELECT id, offerText, subtitle, couponCode, toneStart, toneEnd, isActive, updatedAt FROM HomeHeroOffer ORDER BY updatedAt DESC LIMIT 1`;
-  const row = rows[0] ?? null;
-
-  let runningCoupon: {
-    code: string;
-    title: string;
-    type: 'flat' | 'percent';
-    value: number;
-  } | null = null;
-  if (row?.couponCode) {
-    const coupons = await prisma.$queryRaw<
+  try {
+    await ensureHomeHeroOfferTable();
+    await seedDefaultHeroOffer();
+    const rows = await prisma.$queryRaw<
       Array<{
-        code: string;
-        title: string;
-        type: 'flat' | 'percent';
-        value: number;
+        id: string;
+        offerText: string;
+        subtitle: string;
+        couponCode: string | null;
+        toneStart: string | null;
+        toneEnd: string | null;
         isActive: number | boolean;
-        startsAt: Date | null;
-        endsAt: Date | null;
-        usageLimit: number | null;
-        usedCount: number;
+        updatedAt: Date;
       }>
-    >`SELECT code, title, type, value, isActive, startsAt, endsAt, usageLimit, usedCount FROM Coupon WHERE code = ${row.couponCode} LIMIT 1`;
-    if (coupons[0] && isCouponRunning(coupons[0])) {
-      runningCoupon = {
-        code: coupons[0].code,
-        title: coupons[0].title,
-        type: coupons[0].type,
-        value: Number(coupons[0].value ?? 0)
-      };
-    }
-  }
+    >`SELECT id, offerText, subtitle, couponCode, toneStart, toneEnd, isActive, updatedAt FROM HomeHeroOffer ORDER BY updatedAt DESC LIMIT 1`;
+    const row = rows[0] ?? null;
 
-  return res.json({
-    offer: row
-      ? {
-          id: row.id,
-          offerText: row.offerText,
-          subtitle: row.subtitle,
-          couponCode: row.couponCode,
-          toneStart: row.toneStart || '#7B2FF7',
-          toneEnd: row.toneEnd || '#9F5BFF',
-          isActive: Boolean(row.isActive),
-          runningCoupon,
-          updatedAt: new Date(row.updatedAt).toISOString()
-        }
-      : null
-  });
+    let runningCoupon: {
+      code: string;
+      title: string;
+      type: 'flat' | 'percent';
+      value: number;
+    } | null = null;
+    if (row?.couponCode) {
+      const coupons = await prisma.$queryRaw<
+        Array<{
+          code: string;
+          title: string;
+          type: 'flat' | 'percent';
+          value: number;
+          isActive: number | boolean;
+          startsAt: Date | null;
+          endsAt: Date | null;
+          usageLimit: number | null;
+          usedCount: number;
+        }>
+      >`SELECT code, title, type, value, isActive, startsAt, endsAt, usageLimit, usedCount FROM Coupon WHERE code = ${row.couponCode} LIMIT 1`;
+      if (coupons[0] && isCouponRunning(coupons[0])) {
+        runningCoupon = {
+          code: coupons[0].code,
+          title: coupons[0].title,
+          type: coupons[0].type,
+          value: Number(coupons[0].value ?? 0)
+        };
+      }
+    }
+
+    return res.json({
+      offer: row
+        ? {
+            id: row.id,
+            offerText: row.offerText,
+            subtitle: row.subtitle,
+            couponCode: row.couponCode,
+            toneStart: row.toneStart || '#7B2FF7',
+            toneEnd: row.toneEnd || '#9F5BFF',
+            isActive: Boolean(row.isActive),
+            runningCoupon,
+            updatedAt: new Date(row.updatedAt).toISOString()
+          }
+        : null
+    });
+  } catch (error) {
+    return handleAdminRouteError(res, 'home-offer', error);
+  }
 });
 
 router.post('/home-banners/upsert', requireAuth, requireRole('admin'), async (req: any, res) => {
-  const parsed = homeBannerSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ message: 'Invalid home banner payload', errors: parsed.error.flatten() });
-  }
-  await ensureHomeBannerTable();
+  try {
+    const parsed = homeBannerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Invalid home banner payload', errors: parsed.error.flatten() });
+    }
+    await ensureHomeBannerTable();
 
-  const payload = parsed.data;
-  if (payload.imageUrl.startsWith('data:image/') && payload.imageUrl.length > 900_000) {
-    return res.status(400).json({ message: 'Banner image too large. Please upload a smaller image (recommended under 500KB).' });
-  }
-  const id = payload.id?.trim() || `hb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const targetServiceKey = payload.targetServiceKey?.trim() || null;
-  const toneStart = payload.toneStart || '#6C4DFF';
-  const toneEnd = payload.toneEnd || '#8F76FF';
-  const bannerKey = payload.bannerKey.trim();
-  const row = await prisma.$queryRaw<Array<{ id: string }>>`SELECT id FROM HomeBanner WHERE bannerKey = ${bannerKey} LIMIT 1`.catch(() => []);
-  const targetId = payload.id?.trim() || row[0]?.id || id;
-  await prisma.$executeRawUnsafe(
-    `
-      REPLACE INTO HomeBanner
-        (id, bannerKey, title, subtitle, highlightText, imageUrl, targetServiceKey, toneStart, toneEnd, isActive, sortOrder, updatedById)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    targetId,
-    bannerKey,
-    payload.title,
-    payload.subtitle,
-    payload.highlightText,
-    payload.imageUrl,
-    targetServiceKey,
-    toneStart,
-    toneEnd,
-    payload.isActive ? 1 : 0,
-    payload.sortOrder,
-    req.auth?.userId ?? null
-  );
+    const payload = parsed.data;
+    if (payload.imageUrl.startsWith('data:image/') && payload.imageUrl.length > 900_000) {
+      return res.status(400).json({ message: 'Banner image too large. Please upload a smaller image (recommended under 500KB).' });
+    }
+    const id = payload.id?.trim() || `hb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const targetServiceKey = payload.targetServiceKey?.trim() || null;
+    const toneStart = payload.toneStart || '#6C4DFF';
+    const toneEnd = payload.toneEnd || '#8F76FF';
+    const bannerKey = payload.bannerKey.trim();
+    const row = await prisma.$queryRaw<Array<{ id: string }>>`SELECT id FROM HomeBanner WHERE bannerKey = ${bannerKey} LIMIT 1`.catch(() => []);
+    const targetId = payload.id?.trim() || row[0]?.id || id;
+    await prisma.$executeRawUnsafe(
+      `
+        REPLACE INTO HomeBanner
+          (id, bannerKey, title, subtitle, highlightText, imageUrl, targetServiceKey, toneStart, toneEnd, isActive, sortOrder, updatedById)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      targetId,
+      bannerKey,
+      payload.title,
+      payload.subtitle,
+      payload.highlightText,
+      payload.imageUrl,
+      targetServiceKey,
+      toneStart,
+      toneEnd,
+      payload.isActive ? 1 : 0,
+      payload.sortOrder,
+      req.auth?.userId ?? null
+    );
 
-  deleteCacheByPrefix('/home-banners');
-  return res.status(201).json({ ok: true, id: targetId });
+    deleteCacheByPrefix('/home-banners');
+    return res.status(201).json({ ok: true, id: targetId });
+  } catch (error) {
+    return handleAdminRouteError(res, 'home-banners/upsert', error);
+  }
 });
 
 router.post('/home-offer/upsert', requireAuth, requireRole('admin'), async (req: any, res) => {
-  const parsed = homeHeroOfferSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ message: 'Invalid home offer payload', errors: parsed.error.flatten() });
-  }
-  await ensureHomeHeroOfferTable();
-  const payload = parsed.data;
-  const id = payload.id?.trim() || 'hero_default';
-  const couponCode = payload.couponCode?.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
-  await prisma.$executeRawUnsafe(
-    `
-      REPLACE INTO HomeHeroOffer
-        (id, offerText, subtitle, couponCode, toneStart, toneEnd, isActive, updatedById)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    id,
-    payload.offerText,
-    payload.subtitle,
-    couponCode,
-    payload.toneStart || '#7B2FF7',
-    payload.toneEnd || '#9F5BFF',
-    payload.isActive ? 1 : 0,
-    req.auth?.userId ?? null
-  );
+  try {
+    const parsed = homeHeroOfferSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Invalid home offer payload', errors: parsed.error.flatten() });
+    }
+    await ensureHomeHeroOfferTable();
+    const payload = parsed.data;
+    const id = payload.id?.trim() || 'hero_default';
+    const couponCode = payload.couponCode?.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
+    await prisma.$executeRawUnsafe(
+      `
+        REPLACE INTO HomeHeroOffer
+          (id, offerText, subtitle, couponCode, toneStart, toneEnd, isActive, updatedById)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      id,
+      payload.offerText,
+      payload.subtitle,
+      couponCode,
+      payload.toneStart || '#7B2FF7',
+      payload.toneEnd || '#9F5BFF',
+      payload.isActive ? 1 : 0,
+      req.auth?.userId ?? null
+    );
 
-  deleteCacheByPrefix('/home-banners');
-  deleteCacheByPrefix('/coupons');
-  return res.status(201).json({ ok: true, id });
+    deleteCacheByPrefix('/home-banners');
+    deleteCacheByPrefix('/coupons');
+    return res.status(201).json({ ok: true, id });
+  } catch (error) {
+    return handleAdminRouteError(res, 'home-offer/upsert', error);
+  }
 });
 
 router.delete('/home-banners/:id', requireAuth, requireRole('admin'), async (req, res) => {
