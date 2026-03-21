@@ -98,14 +98,15 @@ const seedDefaultHomeBanners = async () => {
   const rows = await prisma.$queryRaw<Array<{ count: number }>>`SELECT COUNT(*) as count FROM HomeBanner`;
   const total = Number(rows?.[0]?.count ?? 0);
   if (total > 0) return;
+  const now = new Date();
 
   await prisma.$executeRawUnsafe(
     `
       INSERT INTO HomeBanner
-        (id, bannerKey, title, subtitle, highlightText, imageUrl, targetServiceKey, toneStart, toneEnd, isActive, sortOrder, updatedById)
+        (id, bannerKey, title, subtitle, highlightText, imageUrl, targetServiceKey, toneStart, toneEnd, isActive, sortOrder, createdAt, updatedAt, updatedById)
       VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?),
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?),
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     'hb_default_salon',
     'salon-home',
@@ -118,6 +119,8 @@ const seedDefaultHomeBanners = async () => {
     '#8F76FF',
     1,
     1,
+    now,
+    now,
     null,
     'hb_default_expert',
     'expert-help',
@@ -130,6 +133,8 @@ const seedDefaultHomeBanners = async () => {
     '#6C4DFF',
     1,
     2,
+    now,
+    now,
     null
   );
 };
@@ -138,12 +143,13 @@ const seedDefaultHeroOffer = async () => {
   const rows = await prisma.$queryRaw<Array<{ count: number }>>`SELECT COUNT(*) as count FROM HomeHeroOffer`;
   const total = Number(rows?.[0]?.count ?? 0);
   if (total > 0) return;
+  const now = new Date();
   await prisma.$executeRawUnsafe(
     `
       INSERT INTO HomeHeroOffer
-        (id, offerText, subtitle, couponCode, toneStart, toneEnd, isActive, updatedById)
+        (id, offerText, subtitle, couponCode, toneStart, toneEnd, isActive, updatedAt, updatedById)
       VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     'hero_default',
     '40% OFF',
@@ -152,6 +158,7 @@ const seedDefaultHeroOffer = async () => {
     '#7B2FF7',
     '#9F5BFF',
     1,
+    now,
     null
   );
 };
@@ -409,8 +416,8 @@ router.post('/home-banners/upsert', requireAuth, requireRole('admin'), async (re
     await prisma.$executeRawUnsafe(
       `
         REPLACE INTO HomeBanner
-          (id, bannerKey, title, subtitle, highlightText, imageUrl, targetServiceKey, toneStart, toneEnd, isActive, sortOrder, updatedById)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, bannerKey, title, subtitle, highlightText, imageUrl, targetServiceKey, toneStart, toneEnd, isActive, sortOrder, createdAt, updatedAt, updatedById)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       targetId,
       bannerKey,
@@ -423,6 +430,8 @@ router.post('/home-banners/upsert', requireAuth, requireRole('admin'), async (re
       toneEnd,
       payload.isActive ? 1 : 0,
       payload.sortOrder,
+      new Date(),
+      new Date(),
       req.auth?.userId ?? null
     );
 
@@ -446,8 +455,8 @@ router.post('/home-offer/upsert', requireAuth, requireRole('admin'), async (req:
     await prisma.$executeRawUnsafe(
       `
         REPLACE INTO HomeHeroOffer
-          (id, offerText, subtitle, couponCode, toneStart, toneEnd, isActive, updatedById)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          (id, offerText, subtitle, couponCode, toneStart, toneEnd, isActive, updatedAt, updatedById)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       id,
       payload.offerText,
@@ -456,6 +465,7 @@ router.post('/home-offer/upsert', requireAuth, requireRole('admin'), async (req:
       payload.toneStart || '#7B2FF7',
       payload.toneEnd || '#9F5BFF',
       payload.isActive ? 1 : 0,
+      new Date(),
       req.auth?.userId ?? null
     );
 
