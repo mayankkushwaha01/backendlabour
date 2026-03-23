@@ -210,6 +210,15 @@ router.get('/my', requireAuth, async (req: AuthRequest, res) => {
     });
   } catch (error) {
     console.error('bookings/my failed', error);
+    const message = String((error as any)?.message ?? '');
+    if (
+      message.includes('Unknown argument') ||
+      message.includes('Unknown field') ||
+      message.includes('column') ||
+      message.includes('does not exist')
+    ) {
+      return res.status(500).json({ message: 'Booking schema not migrated yet. Railway par prisma db push chahiye.' });
+    }
     return res.status(500).json({ message: 'Unable to fetch bookings' });
   }
 });

@@ -316,187 +316,200 @@ router.put('/cart', requireAuth, async (req: AuthRequest, res) => {
 });
 
 router.patch('/worker/profile', requireAuth, async (req: AuthRequest, res) => {
-  const parsed = profileSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ message: 'Invalid profile payload', errors: parsed.error.flatten() });
-  }
-  const existingProfile = await prisma.workerProfile.findUnique({
-    where: { userId: req.auth!.userId }
-  });
-  const existingUser = await prisma.user.findUnique({
-    where: { id: req.auth!.userId },
-    select: { name: true, phone: true, profilePhotoUrl: true }
-  });
-
-  const hasOversizedDataUrl = (value?: string) => Boolean(value && value.startsWith('data:image/') && value.length > MAX_DATA_URL_CHARS);
-  const hasOversizedUrl = (value?: string) => Boolean(value && !value.startsWith('data:image/') && value.length > MAX_URL_CHARS);
-  if (
-    hasOversizedDataUrl(parsed.data.photoUrl) ||
-    hasOversizedDataUrl(parsed.data.profilePhotoUrl) ||
-    (parsed.data.portfolioUrls ?? []).some((url) => hasOversizedDataUrl(url))
-  ) {
-    return res.status(400).json({ message: 'Image is too large. Please upload a smaller image.' });
-  }
-  if (
-    hasOversizedUrl(parsed.data.photoUrl) ||
-    hasOversizedUrl(parsed.data.profilePhotoUrl) ||
-    (parsed.data.portfolioUrls ?? []).some((url) => hasOversizedUrl(url)) ||
-    (parsed.data.portfolioVideoUrls ?? []).some((url) => hasOversizedUrl(url))
-  ) {
-    return res.status(400).json({ message: 'URL is too long.' });
-  }
-
-  const { profilePhotoUrl, name, phone, aadhaarNumber, aadhaarCardUrl, ...workerProfileData } = parsed.data;
-  if (
-    workerProfileData.priceFrom !== undefined &&
-    workerProfileData.priceTo !== undefined &&
-    workerProfileData.priceFrom > workerProfileData.priceTo
-  ) {
-    return res.status(400).json({ message: 'priceFrom cannot be greater than priceTo' });
-  }
-  const normalizedWorkerProfileData = {
-    ...workerProfileData,
-    ...(workerProfileData.location !== undefined ? { location: workerProfileData.location.trim().slice(0, 160) } : {}),
-    ...(workerProfileData.bio !== undefined ? { bio: workerProfileData.bio.trim().slice(0, 320) } : {}),
-    ...(workerProfileData.workingHours !== undefined ? { workingHours: workerProfileData.workingHours.trim().slice(0, 120) } : {}),
-    ...(workerProfileData.skills ? { skills: compactList(workerProfileData.skills, 15, 50) } : {}),
-    ...(workerProfileData.serviceAreas ? { serviceAreas: compactList(workerProfileData.serviceAreas, 15, 80) } : {}),
-    ...(workerProfileData.portfolioUrls ? { portfolioUrls: compactList(workerProfileData.portfolioUrls, 5, MAX_URL_CHARS) } : {}),
-    ...(workerProfileData.portfolioVideoUrls ? { portfolioVideoUrls: compactList(workerProfileData.portfolioVideoUrls, 5, MAX_URL_CHARS) } : {}),
-    ...(workerProfileData.certifications ? { certifications: compactList(workerProfileData.certifications, 10, 120) } : {})
-  };
-
-  if (profilePhotoUrl !== undefined) {
-    await prisma.user.update({
-      where: { id: req.auth!.userId },
-      data: { profilePhotoUrl }
-    });
-  }
-
-  if (name !== undefined) {
-    await prisma.user.update({
-      where: { id: req.auth!.userId },
-      data: { name: name.trim() }
-    });
-  }
-
-  if (phone !== undefined) {
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length < 10 || digits.length > 15) {
-      return res.status(400).json({ message: 'Invalid phone number format' });
+  try {
+    const parsed = profileSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Invalid profile payload', errors: parsed.error.flatten() });
     }
-    try {
+    const existingProfile = await prisma.workerProfile.findUnique({
+      where: { userId: req.auth!.userId }
+    });
+    const existingUser = await prisma.user.findUnique({
+      where: { id: req.auth!.userId },
+      select: { name: true, phone: true, profilePhotoUrl: true, role: true, isApproved: true }
+    });
+
+    const hasOversizedDataUrl = (value?: string) => Boolean(value && value.startsWith('data:image/') && value.length > MAX_DATA_URL_CHARS);
+    const hasOversizedUrl = (value?: string) => Boolean(value && !value.startsWith('data:image/') && value.length > MAX_URL_CHARS);
+    if (
+      hasOversizedDataUrl(parsed.data.photoUrl) ||
+      hasOversizedDataUrl(parsed.data.profilePhotoUrl) ||
+      (parsed.data.portfolioUrls ?? []).some((url) => hasOversizedDataUrl(url))
+    ) {
+      return res.status(400).json({ message: 'Image is too large. Please upload a smaller image.' });
+    }
+    if (
+      hasOversizedUrl(parsed.data.photoUrl) ||
+      hasOversizedUrl(parsed.data.profilePhotoUrl) ||
+      (parsed.data.portfolioUrls ?? []).some((url) => hasOversizedUrl(url)) ||
+      (parsed.data.portfolioVideoUrls ?? []).some((url) => hasOversizedUrl(url))
+    ) {
+      return res.status(400).json({ message: 'URL is too long.' });
+    }
+
+    const { profilePhotoUrl, name, phone, aadhaarNumber, aadhaarCardUrl, ...workerProfileData } = parsed.data;
+    if (
+      workerProfileData.priceFrom !== undefined &&
+      workerProfileData.priceTo !== undefined &&
+      workerProfileData.priceFrom > workerProfileData.priceTo
+    ) {
+      return res.status(400).json({ message: 'priceFrom cannot be greater than priceTo' });
+    }
+    const normalizedWorkerProfileData = {
+      ...workerProfileData,
+      ...(workerProfileData.location !== undefined ? { location: workerProfileData.location.trim().slice(0, 160) } : {}),
+      ...(workerProfileData.bio !== undefined ? { bio: workerProfileData.bio.trim().slice(0, 320) } : {}),
+      ...(workerProfileData.workingHours !== undefined ? { workingHours: workerProfileData.workingHours.trim().slice(0, 120) } : {}),
+      ...(workerProfileData.skills ? { skills: compactList(workerProfileData.skills, 15, 50) } : {}),
+      ...(workerProfileData.serviceAreas ? { serviceAreas: compactList(workerProfileData.serviceAreas, 15, 80) } : {}),
+      ...(workerProfileData.portfolioUrls ? { portfolioUrls: compactList(workerProfileData.portfolioUrls, 5, MAX_URL_CHARS) } : {}),
+      ...(workerProfileData.portfolioVideoUrls ? { portfolioVideoUrls: compactList(workerProfileData.portfolioVideoUrls, 5, MAX_URL_CHARS) } : {}),
+      ...(workerProfileData.certifications ? { certifications: compactList(workerProfileData.certifications, 10, 120) } : {})
+    };
+
+    if (profilePhotoUrl !== undefined) {
       await prisma.user.update({
         where: { id: req.auth!.userId },
-        data: { phone: digits }
+        data: { profilePhotoUrl }
       });
-    } catch (error: any) {
-      if (error?.code === 'P2002') {
-        return res.status(409).json({ message: 'Phone number already in use' });
+    }
+
+    if (name !== undefined) {
+      await prisma.user.update({
+        where: { id: req.auth!.userId },
+        data: { name: name.trim() }
+      });
+    }
+
+    if (phone !== undefined) {
+      const digits = phone.replace(/\D/g, '');
+      if (digits.length < 10 || digits.length > 15) {
+        return res.status(400).json({ message: 'Invalid phone number format' });
       }
-      throw error;
+      try {
+        await prisma.user.update({
+          where: { id: req.auth!.userId },
+          data: { phone: digits }
+        });
+      } catch (error: any) {
+        if (error?.code === 'P2002') {
+          return res.status(409).json({ message: 'Phone number already in use' });
+        }
+        throw error;
+      }
     }
-  }
 
-  if (aadhaarNumber !== undefined) {
-    const digits = aadhaarNumber.replace(/\D/g, '');
-    if (digits.length !== 12) {
-      return res.status(400).json({ message: 'Aadhaar number must be exactly 12 digits' });
+    if (aadhaarNumber !== undefined) {
+      const digits = aadhaarNumber.replace(/\D/g, '');
+      if (digits.length !== 12) {
+        return res.status(400).json({ message: 'Aadhaar number must be exactly 12 digits' });
+      }
     }
-  }
 
-  if (aadhaarCardUrl !== undefined) {
-    if (aadhaarCardUrl.startsWith('data:image/') && aadhaarCardUrl.length > MAX_DATA_URL_CHARS) {
-      return res.status(400).json({ message: 'Aadhaar image is too large. Please upload a smaller image.' });
+    if (aadhaarCardUrl !== undefined) {
+      if (aadhaarCardUrl.startsWith('data:image/') && aadhaarCardUrl.length > MAX_DATA_URL_CHARS) {
+        return res.status(400).json({ message: 'Aadhaar image is too large. Please upload a smaller image.' });
+      }
+      if (!aadhaarCardUrl.startsWith('data:image/') && aadhaarCardUrl.length > MAX_URL_CHARS) {
+        return res.status(400).json({ message: 'Aadhaar image URL is too long.' });
+      }
     }
-    if (!aadhaarCardUrl.startsWith('data:image/') && aadhaarCardUrl.length > MAX_URL_CHARS) {
-      return res.status(400).json({ message: 'Aadhaar image URL is too long.' });
+
+    const effectiveName = name ?? existingUser?.name ?? '';
+    const effectivePhone = phone ?? existingUser?.phone ?? '';
+    const effectiveProfilePhotoUrl = profilePhotoUrl ?? existingUser?.profilePhotoUrl ?? '';
+    const effectiveLocation = workerProfileData.location ?? existingProfile?.location ?? '';
+    const effectiveSkills = workerProfileData.skills ?? (Array.isArray(existingProfile?.skills) ? existingProfile?.skills : []);
+    const effectiveServiceAreas =
+      workerProfileData.serviceAreas ?? (Array.isArray(existingProfile?.serviceAreas) ? existingProfile?.serviceAreas : []);
+    const effectiveExperienceYears = workerProfileData.experienceYears ?? existingProfile?.experienceYears;
+    const effectivePriceFrom = workerProfileData.priceFrom ?? existingProfile?.priceFrom;
+    const effectivePriceTo = workerProfileData.priceTo ?? existingProfile?.priceTo;
+    const effectiveAadhaarCardUrl = aadhaarCardUrl ?? existingProfile?.aadhaarCardUrl ?? '';
+    const hasAadhaar = Boolean(aadhaarNumber) || Boolean(existingProfile?.aadhaarNumberMasked);
+
+    const mandatoryErrors: string[] = [];
+    if (!effectiveName || !effectiveName.trim()) mandatoryErrors.push('name');
+    if (!effectivePhone || effectivePhone.replace(/\D/g, '').length !== 10) mandatoryErrors.push('phone');
+    if (!effectiveProfilePhotoUrl || !effectiveProfilePhotoUrl.trim()) mandatoryErrors.push('profilePhotoUrl');
+    if (!effectiveLocation || !String(effectiveLocation).trim()) mandatoryErrors.push('location');
+    if (!effectiveSkills || effectiveSkills.length === 0) mandatoryErrors.push('skills');
+    if (!effectiveServiceAreas || effectiveServiceAreas.length === 0) mandatoryErrors.push('serviceAreas');
+    if (effectiveExperienceYears === undefined || effectiveExperienceYears < 0) mandatoryErrors.push('experienceYears');
+    if (effectivePriceFrom === undefined || effectivePriceFrom <= 0) mandatoryErrors.push('priceFrom');
+    if (effectivePriceTo === undefined || effectivePriceTo <= 0) mandatoryErrors.push('priceTo');
+    if (!hasAadhaar) mandatoryErrors.push('aadhaarNumber');
+    if (!effectiveAadhaarCardUrl || !String(effectiveAadhaarCardUrl).trim()) mandatoryErrors.push('aadhaarCardUrl');
+    if (mandatoryErrors.length > 0) {
+      return res.status(400).json({
+        message: `Complete all mandatory worker profile fields before saving: ${mandatoryErrors.join(', ')}`
+      });
     }
-  }
 
-  const effectiveName = name ?? existingUser?.name ?? '';
-  const effectivePhone = phone ?? existingUser?.phone ?? '';
-  const effectiveProfilePhotoUrl = profilePhotoUrl ?? existingUser?.profilePhotoUrl ?? '';
-  const effectiveLocation = workerProfileData.location ?? existingProfile?.location ?? '';
-  const effectiveSkills = workerProfileData.skills ?? (Array.isArray(existingProfile?.skills) ? existingProfile?.skills : []);
-  const effectiveServiceAreas =
-    workerProfileData.serviceAreas ?? (Array.isArray(existingProfile?.serviceAreas) ? existingProfile?.serviceAreas : []);
-  const effectiveExperienceYears = workerProfileData.experienceYears ?? existingProfile?.experienceYears;
-  const effectivePriceFrom = workerProfileData.priceFrom ?? existingProfile?.priceFrom;
-  const effectivePriceTo = workerProfileData.priceTo ?? existingProfile?.priceTo;
-  const effectiveAadhaarCardUrl = aadhaarCardUrl ?? existingProfile?.aadhaarCardUrl ?? '';
-  const hasAadhaar = Boolean(aadhaarNumber) || Boolean(existingProfile?.aadhaarNumberMasked);
-
-  const mandatoryErrors: string[] = [];
-  if (!effectiveName || !effectiveName.trim()) mandatoryErrors.push('name');
-  if (!effectivePhone || effectivePhone.replace(/\D/g, '').length !== 10) mandatoryErrors.push('phone');
-  if (!effectiveProfilePhotoUrl || !effectiveProfilePhotoUrl.trim()) mandatoryErrors.push('profilePhotoUrl');
-  if (!effectiveLocation || !String(effectiveLocation).trim()) mandatoryErrors.push('location');
-  if (!effectiveSkills || effectiveSkills.length === 0) mandatoryErrors.push('skills');
-  if (!effectiveServiceAreas || effectiveServiceAreas.length === 0) mandatoryErrors.push('serviceAreas');
-  if (effectiveExperienceYears === undefined || effectiveExperienceYears < 0) mandatoryErrors.push('experienceYears');
-  if (effectivePriceFrom === undefined || effectivePriceFrom <= 0) mandatoryErrors.push('priceFrom');
-  if (effectivePriceTo === undefined || effectivePriceTo <= 0) mandatoryErrors.push('priceTo');
-  if (!hasAadhaar) mandatoryErrors.push('aadhaarNumber');
-  if (!effectiveAadhaarCardUrl || !String(effectiveAadhaarCardUrl).trim()) mandatoryErrors.push('aadhaarCardUrl');
-  if (mandatoryErrors.length > 0) {
-    return res.status(400).json({
-      message: `Complete all mandatory worker profile fields before saving: ${mandatoryErrors.join(', ')}`
+    const profile = await prisma.workerProfile.upsert({
+      where: { userId: req.auth!.userId },
+      update: {
+        ...(aadhaarNumber !== undefined ? { aadhaarNumberMasked: maskAadhaar(aadhaarNumber) } : {}),
+        ...(aadhaarCardUrl !== undefined ? { aadhaarCardUrl } : {}),
+        ...normalizedWorkerProfileData
+      },
+      create: {
+        userId: req.auth!.userId,
+        skills: Array.isArray((normalizedWorkerProfileData as any).skills) ? (normalizedWorkerProfileData as any).skills : [],
+        ...(aadhaarNumber !== undefined ? { aadhaarNumberMasked: maskAadhaar(aadhaarNumber) } : {}),
+        ...(aadhaarCardUrl !== undefined ? { aadhaarCardUrl } : {}),
+        ...normalizedWorkerProfileData
+      } as any
     });
-  }
 
-  const profile = await prisma.workerProfile.upsert({
-    where: { userId: req.auth!.userId },
-    update: {
-      ...(aadhaarNumber !== undefined ? { aadhaarNumberMasked: maskAadhaar(aadhaarNumber) } : {}),
-      ...(aadhaarCardUrl !== undefined ? { aadhaarCardUrl } : {}),
-      ...normalizedWorkerProfileData
-    },
-    create: {
-      userId: req.auth!.userId,
-      skills: Array.isArray((normalizedWorkerProfileData as any).skills) ? (normalizedWorkerProfileData as any).skills : [],
-      ...(aadhaarNumber !== undefined ? { aadhaarNumberMasked: maskAadhaar(aadhaarNumber) } : {}),
-      ...(aadhaarCardUrl !== undefined ? { aadhaarCardUrl } : {}),
-      ...normalizedWorkerProfileData
-    } as any
-  });
+    if (!profile) return res.status(404).json({ message: 'Worker profile not found' });
 
-  if (!profile) return res.status(404).json({ message: 'Worker profile not found' });
-
-  if (!existingProfile) {
-    await prisma.user.update({
-      where: { id: req.auth!.userId },
-      data: { isApproved: false }
-    });
-  }
-
-  const p: any = profile;
-
-  return res.json({
-    profile: {
-      id: p.id,
-      userId: p.userId,
-      photoUrl: p.photoUrl,
-      location: p.location ?? '',
-      isOnDuty: p.isOnDuty,
-      skills: Array.isArray(p.skills) ? (p.skills as string[]) : [],
-      serviceAreas: Array.isArray(p.serviceAreas) ? (p.serviceAreas as string[]) : [],
-      portfolioUrls: Array.isArray(p.portfolioUrls) ? (p.portfolioUrls as string[]) : [],
-      portfolioVideoUrls: Array.isArray(p.portfolioVideoUrls) ? (p.portfolioVideoUrls as string[]) : [],
-      certifications: Array.isArray(p.certifications) ? (p.certifications as string[]) : [],
-      responseTimeMins: p.responseTimeMins ?? 30,
-      workingHours: p.workingHours ?? '',
-      priceFrom: p.priceFrom ?? 0,
-      priceTo: p.priceTo ?? 0,
-      experienceYears: p.experienceYears,
-      bio: p.bio,
-      aadhaarNumberMasked: p.aadhaarNumberMasked ?? '',
-      aadhaarCardUrl: p.aadhaarCardUrl ?? '',
-      pricePerHour: p.pricePerHour,
-      rating: p.rating,
-      totalJobs: p.totalJobs
+    if (!existingProfile || existingUser?.role !== 'worker' || !existingUser?.isApproved) {
+      await prisma.user.update({
+        where: { id: req.auth!.userId },
+        data: { isApproved: false }
+      });
     }
-  });
+
+    const p: any = profile;
+
+    return res.json({
+      profile: {
+        id: p.id,
+        userId: p.userId,
+        photoUrl: p.photoUrl,
+        location: p.location ?? '',
+        isOnDuty: p.isOnDuty,
+        skills: Array.isArray(p.skills) ? (p.skills as string[]) : [],
+        serviceAreas: Array.isArray(p.serviceAreas) ? (p.serviceAreas as string[]) : [],
+        portfolioUrls: Array.isArray(p.portfolioUrls) ? (p.portfolioUrls as string[]) : [],
+        portfolioVideoUrls: Array.isArray(p.portfolioVideoUrls) ? (p.portfolioVideoUrls as string[]) : [],
+        certifications: Array.isArray(p.certifications) ? (p.certifications as string[]) : [],
+        responseTimeMins: p.responseTimeMins ?? 30,
+        workingHours: p.workingHours ?? '',
+        priceFrom: p.priceFrom ?? 0,
+        priceTo: p.priceTo ?? 0,
+        experienceYears: p.experienceYears,
+        bio: p.bio,
+        aadhaarNumberMasked: p.aadhaarNumberMasked ?? '',
+        aadhaarCardUrl: p.aadhaarCardUrl ?? '',
+        pricePerHour: p.pricePerHour,
+        rating: p.rating,
+        totalJobs: p.totalJobs
+      }
+    });
+  } catch (error: any) {
+    const message = String(error?.message ?? '');
+    if (
+      message.includes('Unknown argument') ||
+      message.includes('Unknown field') ||
+      message.includes('column') ||
+      message.includes('does not exist')
+    ) {
+      return res.status(500).json({ message: 'Worker profile schema not migrated yet. Railway par prisma db push chahiye.' });
+    }
+    return res.status(500).json({ message: 'Failed to save worker profile' });
+  }
 });
 
 router.patch('/worker/duty', requireAuth, async (req: AuthRequest, res) => {
