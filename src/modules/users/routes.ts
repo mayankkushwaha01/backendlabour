@@ -418,6 +418,7 @@ router.patch('/worker/profile', requireAuth, async (req: AuthRequest, res) => {
     const effectiveName = name ?? existingUser?.name ?? '';
     const effectivePhone = phone ?? existingUser?.phone ?? '';
     const effectiveProfilePhotoUrl = profilePhotoUrl ?? existingUser?.profilePhotoUrl ?? '';
+    const effectivePhotoUrl = workerProfileData.photoUrl ?? existingProfile?.photoUrl ?? effectiveProfilePhotoUrl;
     const effectiveLocation = workerProfileData.location ?? existingProfile?.location ?? '';
     const effectiveSkills = workerProfileData.skills ?? (Array.isArray(existingProfile?.skills) ? existingProfile?.skills : []);
     const effectiveServiceAreas =
@@ -425,6 +426,8 @@ router.patch('/worker/profile', requireAuth, async (req: AuthRequest, res) => {
     const effectiveExperienceYears = workerProfileData.experienceYears ?? existingProfile?.experienceYears;
     const effectivePriceFrom = workerProfileData.priceFrom ?? existingProfile?.priceFrom;
     const effectivePriceTo = workerProfileData.priceTo ?? existingProfile?.priceTo;
+    const effectiveWorkingHours = workerProfileData.workingHours ?? existingProfile?.workingHours ?? '';
+    const effectiveBio = workerProfileData.bio ?? existingProfile?.bio ?? '';
     const effectiveAadhaarCardUrl = aadhaarCardUrl ?? existingProfile?.aadhaarCardUrl ?? '';
     const hasAadhaar = Boolean(aadhaarNumber) || Boolean(existingProfile?.aadhaarNumberMasked);
 
@@ -432,12 +435,15 @@ router.patch('/worker/profile', requireAuth, async (req: AuthRequest, res) => {
     if (!effectiveName || !effectiveName.trim()) mandatoryErrors.push('name');
     if (!effectivePhone || effectivePhone.replace(/\D/g, '').length !== 10) mandatoryErrors.push('phone');
     if (!effectiveProfilePhotoUrl || !effectiveProfilePhotoUrl.trim()) mandatoryErrors.push('profilePhotoUrl');
+    if (!effectivePhotoUrl || !String(effectivePhotoUrl).trim()) mandatoryErrors.push('photoUrl');
     if (!effectiveLocation || !String(effectiveLocation).trim()) mandatoryErrors.push('location');
     if (!effectiveSkills || effectiveSkills.length === 0) mandatoryErrors.push('skills');
     if (!effectiveServiceAreas || effectiveServiceAreas.length === 0) mandatoryErrors.push('serviceAreas');
     if (effectiveExperienceYears === undefined || effectiveExperienceYears < 0) mandatoryErrors.push('experienceYears');
     if (effectivePriceFrom === undefined || effectivePriceFrom <= 0) mandatoryErrors.push('priceFrom');
     if (effectivePriceTo === undefined || effectivePriceTo <= 0) mandatoryErrors.push('priceTo');
+    if (!String(effectiveWorkingHours).trim()) mandatoryErrors.push('workingHours');
+    if (!String(effectiveBio).trim()) mandatoryErrors.push('bio');
     if (!hasAadhaar) mandatoryErrors.push('aadhaarNumber');
     if (!effectiveAadhaarCardUrl || !String(effectiveAadhaarCardUrl).trim()) mandatoryErrors.push('aadhaarCardUrl');
     if (mandatoryErrors.length > 0) {
@@ -451,11 +457,17 @@ router.patch('/worker/profile', requireAuth, async (req: AuthRequest, res) => {
       update: {
         ...(aadhaarNumber !== undefined ? { aadhaarNumberMasked: maskAadhaar(aadhaarNumber) } : {}),
         ...(aadhaarCardUrl !== undefined ? { aadhaarCardUrl } : {}),
+        ...(workerProfileData.photoUrl === undefined ? { photoUrl: effectivePhotoUrl } : {}),
+        ...(workerProfileData.workingHours === undefined ? { workingHours: effectiveWorkingHours } : {}),
+        ...(workerProfileData.bio === undefined ? { bio: effectiveBio } : {}),
         ...normalizedWorkerProfileData
       },
       create: {
         userId: req.auth!.userId,
         skills: Array.isArray((normalizedWorkerProfileData as any).skills) ? (normalizedWorkerProfileData as any).skills : [],
+        photoUrl: effectivePhotoUrl,
+        workingHours: effectiveWorkingHours,
+        bio: effectiveBio,
         ...(aadhaarNumber !== undefined ? { aadhaarNumberMasked: maskAadhaar(aadhaarNumber) } : {}),
         ...(aadhaarCardUrl !== undefined ? { aadhaarCardUrl } : {}),
         ...normalizedWorkerProfileData
