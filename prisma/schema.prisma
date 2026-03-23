@@ -107,6 +107,8 @@ model User {
   createdAt     DateTime        @default(now())
   updatedAt DateTime @updatedAt
   workerProfile WorkerProfile?
+  cartDraft CartDraft?
+  customerAddressBook CustomerAddressBook?
   customerBookings Booking[]    @relation("CustomerBookings")
   workerBookings   Booking[]    @relation("WorkerBookings")
   customerReviews  Review[]     @relation("CustomerReviews")
@@ -148,6 +150,25 @@ model WorkerProfile {
   createdAt          DateTime @default(now())
   updatedAt DateTime @updatedAt
   user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CartDraft {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  items     Json
+  promoCode String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CustomerAddressBook {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  addresses Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model HomeBanner {

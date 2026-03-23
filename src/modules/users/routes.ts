@@ -62,6 +62,30 @@ const customerProfileSchema = z.object({
   address: z.string().max(280).optional(),
   profilePhotoUrl: z.string().url().or(z.string().regex(dataUrlImageRegex)).or(z.literal('')).optional()
 });
+const customerAddressSchema = z.object({
+  id: z.string().min(1).max(80),
+  type: z.enum(['Home', 'Office', 'Other']),
+  name: z.string().min(1).max(120),
+  full: z.string().min(1).max(400),
+  phone: z.string().min(8).max(20),
+  isDefault: z.boolean().optional()
+});
+const customerAddressesSchema = z.object({
+  addresses: z.array(customerAddressSchema).max(20)
+});
+const cartItemSchema = z.object({
+  serviceId: z.string().min(1).max(80),
+  name: z.string().min(1).max(160),
+  category: z.string().min(1).max(80),
+  price: z.number().min(0),
+  quantity: z.number().int().min(1).max(20),
+  emoji: z.string().max(10),
+  description: z.string().max(280).optional()
+});
+const cartDraftSchema = z.object({
+  items: z.array(cartItemSchema).max(50),
+  promoCode: z.string().max(40).optional().default('')
+});
 const switchModeSchema = z.object({
   targetRole: z.enum(['customer', 'worker'])
 });
@@ -207,6 +231,88 @@ router.patch('/customer/profile', requireAuth, requireRole('customer'), async (r
     }
     return res.status(500).json({ message: 'Failed to update customer profile' });
   }
+});
+
+router.get('/customer/addresses', requireAuth, requireRole('customer'), async (req: AuthRequest, res) => {
+  const book = await (prisma as any).customerAddressBook.findUnique({
+    where: { userId: req.auth!.userId }
+  });
+
+  return res.json({
+    addresses: Array.isArray(book?.addresses) ? (book.addresses as unknown[]) : []
+  });
+});
+
+router.put('/customer/addresses', requireAuth, requireRole('customer'), async (req: AuthRequest, res) => {
+  const parsed = customerAddressesSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Invalid addresses payload', errors: parsed.error.flatten() });
+  }
+
+  const addresses = parsed.data.addresses.map((address, index) => ({
+    ...address,
+    phone: address.phone.replace(/\D/g, '').slice(-10),
+    isDefault: index === 0 ? true : Boolean(address.isDefault)
+  }));
+
+  await (prisma as any).customerAddressBook.upsert({
+    where: { userId: req.auth!.userId },
+    update: { addresses },
+    create: {
+      userId: req.auth!.userId,
+      addresses
+    }
+  });
+
+  const primary = addresses.find((item) => item.isDefault) ?? addresses[0];
+  if (primary) {
+    const cityLine = primary.full.split('\n').pop() ?? primary.full;
+    await prisma.user.update({
+      where: { id: req.auth!.userId },
+      data: {
+        address: primary.full.slice(0, 280),
+        city: cityLine.slice(0, 120)
+      }
+    });
+  }
+
+  return res.json({ addresses });
+});
+
+router.get('/cart', requireAuth, async (req: AuthRequest, res) => {
+  const draft = await (prisma as any).cartDraft.findUnique({
+    where: { userId: req.auth!.userId }
+  });
+
+  return res.json({
+    items: Array.isArray(draft?.items) ? (draft.items as unknown[]) : [],
+    promoCode: draft?.promoCode ?? ''
+  });
+});
+
+router.put('/cart', requireAuth, async (req: AuthRequest, res) => {
+  const parsed = cartDraftSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Invalid cart payload', errors: parsed.error.flatten() });
+  }
+
+  await (prisma as any).cartDraft.upsert({
+    where: { userId: req.auth!.userId },
+    update: {
+      items: parsed.data.items,
+      promoCode: parsed.data.promoCode || ''
+    },
+    create: {
+      userId: req.auth!.userId,
+      items: parsed.data.items,
+      promoCode: parsed.data.promoCode || ''
+    }
+  });
+
+  return res.json({
+    items: parsed.data.items,
+    promoCode: parsed.data.promoCode || ''
+  });
 });
 
 router.patch('/worker/profile', requireAuth, async (req: AuthRequest, res) => {
