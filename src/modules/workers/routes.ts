@@ -1,5 +1,7 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { prisma } from '../../config/db.js';
+import { requireAuth, type AuthRequest } from '../../middleware/auth.js';
 
 const router = Router();
 
@@ -162,5 +164,129 @@ router.get('/:workerId', async (req, res) => {
   });
 });
 
+const createWorkerSchema = z.object({
+  photoUrl: z.string().url().or(z.literal('')).optional(),
+  location: z.string().min(1).max(160),
+  isOnDuty: z.boolean().default(true),
+  skills: z.array(z.string().max(50)).min(1),
+  serviceAreas: z.array(z.string().max(80)).max(15).optional(),
+  portfolioUrls: z.array(z.string().url()).max(5).optional(),
+  portfolioVideoUrls: z.array(z.string().url()).max(5).optional(),
+  certifications: z.array(z.string().max(120)).max(10).optional(),
+  responseTimeMins: z.number().int().min(1).max(1440).default(30),
+  workingHours: z.string().min(1).max(120),
+  priceFrom: z.number().min(0).default(0),
+  priceTo: z.number().min(0).default(0),
+  experienceYears: z.number().int().min(0).default(0),
+  bio: z.string().min(1).max(320),
+  aadhaarNumberMasked: z.string().min(1).max(20),
+  aadhaarCardUrl: z.string().min(1),
+  pricePerHour: z.number().min(0).default(0)
+});
+
+router.post('/', requireAuth, async (req: AuthRequest, res) => {
+  const parsed = createWorkerSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      message: 'Invalid worker profile payload',
+      errors: parsed.error.flatten()
+    });
+  }
+
+  const {
+    photoUrl,
+    location,
+    isOnDuty,
+    skills,
+    serviceAreas,
+    portfolioUrls,
+    portfolioVideoUrls,
+    certifications,
+    responseTimeMins,
+    workingHours,
+    priceFrom,
+    priceTo,
+    experienceYears,
+    bio,
+    aadhaarNumberMasked,
+    aadhaarCardUrl,
+    pricePerHour
+  } = parsed.data;
+
+  const userId = req.auth!.userId;
+
+  const existingProfile = await prisma.workerProfile.findUnique({
+    where: { userId }
+  });
+
+  const profileData = {
+    photoUrl: photoUrl ?? '',
+    location: location.trim(),
+    isOnDuty,
+    skills,
+    serviceAreas: serviceAreas ?? [],
+    portfolioUrls: portfolioUrls ?? [],
+    portfolioVideoUrls: portfolioVideoUrls ?? [],
+    certifications: certifications ?? [],
+    responseTimeMins,
+    workingHours: workingHours.trim(),
+    priceFrom,
+    priceTo,
+    experienceYears,
+    bio: bio.trim(),
+    aadhaarNumberMasked: aadhaarNumberMasked.trim(),
+    aadhaarCardUrl,
+    pricePerHour
+  };
+
+  const profile = await prisma.workerProfile.upsert({
+    where: { userId },
+    update: profileData,
+    create: {
+      userId,
+      ...profileData
+    }
+  });
+
+  // Ensure the user's role is set to 'worker'
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (user && user.role !== 'worker') {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { role: 'worker' }
+    });
+  }
+
+  const p: any = profile;
+  const statusCode = existingProfile ? 200 : 201;
+
+  return res.status(statusCode).json({
+    profile: {
+      id: p.id,
+      userId: p.userId,
+      photoUrl: p.photoUrl ?? '',
+      location: p.location ?? '',
+      isOnDuty: p.isOnDuty,
+      skills: Array.isArray(p.skills) ? (p.skills as string[]) : [],
+      serviceAreas: Array.isArray(p.serviceAreas) ? (p.serviceAreas as string[]) : [],
+      portfolioUrls: Array.isArray(p.portfolioUrls) ? (p.portfolioUrls as string[]) : [],
+      portfolioVideoUrls: Array.isArray(p.portfolioVideoUrls) ? (p.portfolioVideoUrls as string[]) : [],
+      certifications: Array.isArray(p.certifications) ? (p.certifications as string[]) : [],
+      responseTimeMins: p.responseTimeMins ?? 30,
+      workingHours: p.workingHours ?? '',
+      priceFrom: p.priceFrom ?? 0,
+      priceTo: p.priceTo ?? 0,
+      experienceYears: p.experienceYears ?? 0,
+      bio: p.bio ?? '',
+      aadhaarNumberMasked: p.aadhaarNumberMasked ?? '',
+      aadhaarCardUrl: p.aadhaarCardUrl ?? '',
+      pricePerHour: p.pricePerHour ?? 0,
+      rating: p.rating ?? 0,
+      totalJobs: p.totalJobs ?? 0
+    }
+  });
+});
+
 export default router;
+
 
