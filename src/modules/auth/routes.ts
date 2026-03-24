@@ -10,6 +10,9 @@ import type { UserRole } from '../../types/domain.js';
 const router = Router();
 
 const OTP_TTL_MS = 5 * 60 * 1000;
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const MAX_LOGIN_ATTEMPTS = 5;
+const loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
 
 const normalizePhone = (value: string) => value.replace(/\D/g, '');
 const isValidPhone = (value: string) => /^\d{10,15}$/.test(value);
@@ -44,7 +47,7 @@ const requestPasswordResetSchema = z.object({
 const resetPasswordSchema = z.object({
   email: z.string().email().transform((value) => value.trim().toLowerCase()),
   emailOtpCode: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits'),
-  newPassword: z.string().min(6)
+  newPassword: z.string().min(8)
 });
 
 const signupSchema = z.object({
@@ -52,7 +55,7 @@ const signupSchema = z.object({
   email: z.string().email().transform((value) => value.trim().toLowerCase()).optional(),
   phone: z.string().min(8),
   phoneOtpCode: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits').optional(),
-  password: z.string().min(6),
+  password: z.string().min(8),
   role: z.enum(['customer', 'worker']),
   profilePhotoUrl: z.string().url().or(z.string().regex(dataUrlImageRegex)).or(z.literal('')).optional(),
   aadhaarNumber: z.string().optional(),
@@ -146,6 +149,37 @@ const sendSmsOtp = async (phone: string, otpCode: string) => {
   if (payload && typeof payload.type === 'string' && payload.type.toLowerCase() !== 'success') {
     throw new Error(payload.message || 'Failed to send OTP');
   }
+};
+
+const getLoginAttemptKey = (identifier: string) => normalizePhone(identifier) || identifier.trim().toLowerCase();
+
+const canAttemptLogin = (identifier: string) => {
+  const key = getLoginAttemptKey(identifier);
+  const entry = loginAttempts.get(key);
+  if (!entry) return { allowed: true as const };
+  if (entry.lockedUntil > Date.now()) {
+    const waitMinutes = Math.ceil((entry.lockedUntil - Date.now()) / (60 * 1000));
+    return {
+      allowed: false as const,
+      message: `Too many login attempts. ${waitMinutes} min baad dubara try karo.`
+    };
+  }
+  if (entry.lockedUntil <= Date.now()) {
+    loginAttempts.delete(key);
+  }
+  return { allowed: true as const };
+};
+
+const markLoginFailure = (identifier: string) => {
+  const key = getLoginAttemptKey(identifier);
+  const current = loginAttempts.get(key);
+  const nextCount = (current?.count ?? 0) + 1;
+  const lockedUntil = nextCount >= MAX_LOGIN_ATTEMPTS ? Date.now() + LOGIN_WINDOW_MS : 0;
+  loginAttempts.set(key, { count: nextCount, lockedUntil });
+};
+
+const clearLoginFailures = (identifier: string) => {
+  loginAttempts.delete(getLoginAttemptKey(identifier));
 };
 
 const createMobileSession = (user: any) => {
@@ -469,6 +503,10 @@ router.post('/login', async (req, res) => {
 
   const { password } = parsed.data;
   const rawIdentifier = (parsed.data.identifier ?? parsed.data.email ?? '').trim();
+  const loginGuard = canAttemptLogin(rawIdentifier);
+  if (!loginGuard.allowed) {
+    return res.status(429).json({ message: loginGuard.message });
+  }
   const normalizedEmail = rawIdentifier.toLowerCase();
   const normalizedPhone = normalizePhone(rawIdentifier);
 
@@ -482,17 +520,21 @@ router.post('/login', async (req, res) => {
   }
 
   if (!user) {
+    markLoginFailure(rawIdentifier);
     return res.status(401).json({ message: 'Invalid credentials' });
   }
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
+    markLoginFailure(rawIdentifier);
     return res.status(401).json({ message: 'Invalid credentials' });
   }
 
   if (user.role === 'worker' && !user.isApproved) {
     return res.status(403).json({ message: 'Worker profile pending admin approval' });
   }
+
+  clearLoginFailures(rawIdentifier);
 
   const token = jwt.sign({ sub: user.id, role: user.role }, env.jwtSecret, { expiresIn: '7d' });
 
