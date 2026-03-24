@@ -6,6 +6,7 @@ import { requireRole } from '../../middleware/role.js';
 import { prisma } from '../../config/db.js';
 import { env } from '../../config/env.js';
 import type { UserRole } from '../../types/domain.js';
+import { emitWorkersUpdated } from '../../realtime.js';
 
 const router = Router();
 
@@ -550,6 +551,8 @@ router.patch('/worker/duty', requireAuth, async (req: AuthRequest, res) => {
         skills: []
       } as any
     });
+
+    emitWorkersUpdated();
 
     return res.json({
       profile: {
