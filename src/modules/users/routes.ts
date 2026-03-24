@@ -435,15 +435,12 @@ router.patch('/worker/profile', requireAuth, async (req: AuthRequest, res) => {
     if (!effectiveName || !effectiveName.trim()) mandatoryErrors.push('name');
     if (!effectivePhone || effectivePhone.replace(/\D/g, '').length !== 10) mandatoryErrors.push('phone');
     if (!effectiveProfilePhotoUrl || !effectiveProfilePhotoUrl.trim()) mandatoryErrors.push('profilePhotoUrl');
-    if (!effectivePhotoUrl || !String(effectivePhotoUrl).trim()) mandatoryErrors.push('photoUrl');
     if (!effectiveLocation || !String(effectiveLocation).trim()) mandatoryErrors.push('location');
     if (!effectiveSkills || effectiveSkills.length === 0) mandatoryErrors.push('skills');
     if (!effectiveServiceAreas || effectiveServiceAreas.length === 0) mandatoryErrors.push('serviceAreas');
     if (effectiveExperienceYears === undefined || effectiveExperienceYears < 0) mandatoryErrors.push('experienceYears');
     if (effectivePriceFrom === undefined || effectivePriceFrom <= 0) mandatoryErrors.push('priceFrom');
     if (effectivePriceTo === undefined || effectivePriceTo <= 0) mandatoryErrors.push('priceTo');
-    if (!String(effectiveWorkingHours).trim()) mandatoryErrors.push('workingHours');
-    if (!String(effectiveBio).trim()) mandatoryErrors.push('bio');
     if (!hasAadhaar) mandatoryErrors.push('aadhaarNumber');
     if (!effectiveAadhaarCardUrl || !String(effectiveAadhaarCardUrl).trim()) mandatoryErrors.push('aadhaarCardUrl');
     if (mandatoryErrors.length > 0) {
