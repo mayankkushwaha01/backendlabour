@@ -161,6 +161,7 @@ router.post('/', requireAuth, requireRole('customer'), async (req: AuthRequest, 
       paymentMethod: payload.paymentMethod,
       paymentStatus: payload.paymentMethod === 'cash' ? 'unpaid' : 'paid',
       status: 'pending',
+      cancellationReason: '',
       etaMinutes: 0
     }
   });
