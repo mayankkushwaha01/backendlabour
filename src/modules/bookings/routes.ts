@@ -137,6 +137,9 @@ router.post('/', requireAuth, requireRole('customer'), async (req: AuthRequest, 
   if (!worker || !service || !customer) {
     return res.status(404).json({ message: 'Worker or service not found' });
   }
+  if (worker.id === customer.id) {
+    return res.status(400).json({ message: 'Apne hi account par booking assign nahi ho sakti. Dusra worker choose hoga.' });
+  }
   if (!worker.workerProfile?.isOnDuty) {
     return res.status(400).json({ message: 'Worker is currently off duty. Please choose another worker.' });
   }
