@@ -46,7 +46,9 @@ const profileSchema = z.object({
 });
 
 const dutySchema = z.object({
-  isOnDuty: z.boolean()
+  isOnDuty: z.boolean(),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional()
 });
 
 const maskAadhaar = (value: string) => {
@@ -119,6 +121,9 @@ router.get('/me', requireAuth, async (req: AuthRequest, res) => {
           photoUrl: profile.photoUrl,
           location: profile.location ?? '',
           isOnDuty: profile.isOnDuty,
+          liveLat: typeof profile.liveLat === 'number' ? profile.liveLat : null,
+          liveLng: typeof profile.liveLng === 'number' ? profile.liveLng : null,
+          liveUpdatedAt: profile.liveUpdatedAt ? new Date(profile.liveUpdatedAt).toISOString() : null,
           skills: Array.isArray(profile.skills) ? (profile.skills as string[]) : [],
           serviceAreas: Array.isArray(profile.serviceAreas) ? (profile.serviceAreas as string[]) : [],
           portfolioUrls: Array.isArray(profile.portfolioUrls) ? (profile.portfolioUrls as string[]) : [],
@@ -530,10 +535,18 @@ router.patch('/worker/duty', requireAuth, async (req: AuthRequest, res) => {
   try {
     const profile = await prisma.workerProfile.upsert({
       where: { userId: req.auth!.userId },
-      update: { isOnDuty: parsed.data.isOnDuty },
+      update: {
+        isOnDuty: parsed.data.isOnDuty,
+        ...(parsed.data.lat !== undefined ? { liveLat: parsed.data.lat } : {}),
+        ...(parsed.data.lng !== undefined ? { liveLng: parsed.data.lng } : {}),
+        ...(parsed.data.lat !== undefined || parsed.data.lng !== undefined ? { liveUpdatedAt: new Date() } : {})
+      },
       create: {
         userId: req.auth!.userId,
         isOnDuty: parsed.data.isOnDuty,
+        ...(parsed.data.lat !== undefined ? { liveLat: parsed.data.lat } : {}),
+        ...(parsed.data.lng !== undefined ? { liveLng: parsed.data.lng } : {}),
+        ...(parsed.data.lat !== undefined || parsed.data.lng !== undefined ? { liveUpdatedAt: new Date() } : {}),
         skills: []
       } as any
     });
@@ -542,7 +555,10 @@ router.patch('/worker/duty', requireAuth, async (req: AuthRequest, res) => {
       profile: {
         id: profile.id,
         userId: profile.userId,
-        isOnDuty: profile.isOnDuty
+        isOnDuty: profile.isOnDuty,
+        liveLat: typeof (profile as any).liveLat === 'number' ? (profile as any).liveLat : null,
+        liveLng: typeof (profile as any).liveLng === 'number' ? (profile as any).liveLng : null,
+        liveUpdatedAt: (profile as any).liveUpdatedAt ? new Date((profile as any).liveUpdatedAt).toISOString() : null
       }
     });
   } catch (error: any) {

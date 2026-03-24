@@ -131,6 +131,9 @@ model WorkerProfile {
   photoUrl           String   @db.LongText
   location           String   
   isOnDuty           Boolean  @default(true)
+  liveLat            Float?
+  liveLng            Float?
+  liveUpdatedAt      DateTime?
   skills             Json
   serviceAreas       Json?
   portfolioUrls      Json?

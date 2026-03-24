@@ -5,6 +5,34 @@ import { requireAuth, type AuthRequest } from '../../middleware/auth.js';
 
 const router = Router();
 
+const toLower = (value: string | null | undefined) => String(value ?? '').trim().toLowerCase();
+
+const toStringArray = (value: unknown) =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+
+const calculateDistanceKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+  const earthRadiusKm = 6371;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+};
+
+const getLocationTextScore = (worker: { location?: string; serviceAreas?: string[] }, city: string) => {
+  const target = toLower(city);
+  if (!target) return 0;
+  const location = toLower(worker.location);
+  if (location === target) return 3;
+  if (location.includes(target)) return 2;
+  const serviceAreaMatch = (worker.serviceAreas ?? []).some((area) => toLower(area).includes(target));
+  if (serviceAreaMatch) return 1;
+  return 0;
+};
+
 router.get('/', async (req, res) => {
   const { service, skill, location, sort } = req.query;
 
@@ -103,6 +131,75 @@ router.get('/', async (req, res) => {
   if (sort === 'rating') workers.sort((a, b) => byPriority(a, b) || b.rating - a.rating);
   if (sort === 'price') workers.sort((a, b) => byPriority(a, b) || a.pricePerHour - b.pricePerHour);
   if (sort !== 'rating' && sort !== 'price') workers.sort((a, b) => byPriority(a, b) || byPriorityThenVerified(a, b) || b.rating - a.rating);
+
+  return res.json({ workers });
+});
+
+router.get('/top', async (req, res) => {
+  const limitRaw = Number(req.query.limit ?? 5);
+  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(5, limitRaw)) : 5;
+  const lat = typeof req.query.lat === 'string' ? Number(req.query.lat) : Number.NaN;
+  const lng = typeof req.query.lng === 'string' ? Number(req.query.lng) : Number.NaN;
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+  const city = typeof req.query.city === 'string' ? req.query.city : '';
+
+  let users: any[] = [];
+  try {
+    users = await prisma.user.findMany({
+      where: {
+        isApproved: true,
+        OR: [{ role: 'worker' }, { workerProfile: { isNot: null } }]
+      },
+      include: { workerProfile: true }
+    });
+  } catch {
+    users = await prisma.user.findMany({
+      where: { role: 'worker', isApproved: true },
+      include: { workerProfile: true }
+    });
+  }
+
+  const workers = users
+    .map((user) => {
+      const profile: any = user.workerProfile;
+      if (!profile || profile.isOnDuty === false) return null;
+
+      const skills = toStringArray(profile.skills);
+      const serviceAreas = toStringArray(profile.serviceAreas);
+      const liveLat = typeof profile.liveLat === 'number' ? profile.liveLat : null;
+      const liveLng = typeof profile.liveLng === 'number' ? profile.liveLng : null;
+      const distanceKm = hasCoords && liveLat !== null && liveLng !== null
+        ? calculateDistanceKm(lat, lng, liveLat, liveLng)
+        : null;
+
+      return {
+        id: user.id,
+        name: user.name,
+        photoUrl: profile.photoUrl || user.profilePhotoUrl || '',
+        location: profile.location ?? '',
+        isOnDuty: profile.isOnDuty !== false,
+        isOnline: profile.isOnDuty !== false,
+        skills,
+        serviceAreas,
+        rating: Number(profile.rating ?? 0),
+        totalJobs: Number(profile.totalJobs ?? 0),
+        liveLat,
+        liveLng,
+        liveUpdatedAt: profile.liveUpdatedAt ? new Date(profile.liveUpdatedAt).toISOString() : null,
+        distanceKm,
+        locationScore: getLocationTextScore({ location: profile.location, serviceAreas }, city)
+      };
+    })
+    .filter((worker): worker is NonNullable<typeof worker> => Boolean(worker))
+    .sort((a, b) => {
+      const aDistanceRank = a.distanceKm === null ? Number.POSITIVE_INFINITY : a.distanceKm;
+      const bDistanceRank = b.distanceKm === null ? Number.POSITIVE_INFINITY : b.distanceKm;
+      if (aDistanceRank !== bDistanceRank) return aDistanceRank - bDistanceRank;
+      if (b.locationScore !== a.locationScore) return b.locationScore - a.locationScore;
+      if (b.rating !== a.rating) return b.rating - a.rating;
+      return b.totalJobs - a.totalJobs;
+    })
+    .slice(0, limit);
 
   return res.json({ workers });
 });
