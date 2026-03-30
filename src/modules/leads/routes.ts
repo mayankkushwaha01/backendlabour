@@ -463,15 +463,11 @@ router.get('/:leadId/contact', requireAuth, async (req: AuthRequest, res) => {
   if (!selfUser || !partnerUser) return res.status(404).json({ message: 'Users not found' });
 
   const proxyPhone = normalizeDigits(env.supportProxyPhone || '9999999999') || '9999999999';
-  const roleLabel = isCustomer ? 'customer' : 'worker';
-  const waMessage = `LabourHub lead ${lead.id} ${roleLabel} ${selfUser.name} wants to connect with ${partnerUser.name}.`;
-  const whatsappUrl = `https://wa.me/${proxyPhone}?text=${encodeURIComponent(waMessage)}`;
 
   return res.json({
     leadId: lead.id,
     proxyPhone,
     callUrl: `tel:${proxyPhone}`,
-    whatsappUrl,
     self: {
       id: selfUser.id,
       name: selfUser.name,
@@ -482,7 +478,7 @@ router.get('/:leadId/contact', requireAuth, async (req: AuthRequest, res) => {
       name: partnerUser.name,
       phoneMasked: maskPhone(partnerUser.phone)
     },
-    note: 'Masked privacy contact enabled. Use proxy call or WhatsApp.'
+    note: 'Masked privacy contact enabled. Use proxy call.'
   });
 });
 

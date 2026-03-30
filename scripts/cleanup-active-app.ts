@@ -11,11 +11,6 @@ const main = async () => {
   const before = {
     users: await prisma.user.count(),
     workers: await prisma.user.count({ where: { role: 'worker' } }),
-    businesses: await prisma.business.count(),
-    businessPhotos: await prisma.businessPhoto.count(),
-    businessServices: await prisma.businessService.count(),
-    favoriteBusinesses: await prisma.favoriteBusiness.count(),
-    businessReviews: await prisma.businessReview.count(),
     enquiries: await prisma.enquiry.count(),
     analyticsEvents: await prisma.analyticsEvent.count(),
     bookings: await prisma.booking.count(),
@@ -23,7 +18,6 @@ const main = async () => {
     leads: await prisma.lead.count(),
     leadQuotes: await prisma.leadQuote.count(),
     leadMessages: await prisma.leadMessage.count(),
-    whatsappOtp: await prisma.whatsappOtp.count(),
     emailOtp: await prisma.emailOtp.count()
   };
 
@@ -34,15 +28,9 @@ const main = async () => {
   const deletePlan = {
     analyticsEvents: before.analyticsEvents,
     enquiries: before.enquiries,
-    businessReviews: before.businessReviews,
-    favoriteBusinesses: before.favoriteBusinesses,
-    businessServices: before.businessServices,
-    businessPhotos: before.businessPhotos,
-    businesses: before.businesses,
     leadMessages: before.leadMessages,
     leadQuotes: before.leadQuotes,
     leads: before.leads,
-    expiredWhatsappOtp: await prisma.whatsappOtp.count({ where: { expiresAt: { lt: now } } }),
     expiredEmailOtp: await prisma.emailOtp.count({ where: { expiresAt: { lt: now } } })
   };
 
@@ -57,29 +45,17 @@ const main = async () => {
   const result = await prisma.$transaction(async (tx) => {
     const removedAnalyticsEvents = await tx.analyticsEvent.deleteMany({});
     const removedEnquiries = await tx.enquiry.deleteMany({});
-    const removedBusinessReviews = await tx.businessReview.deleteMany({});
-    const removedFavoriteBusinesses = await tx.favoriteBusiness.deleteMany({});
-    const removedBusinessServices = await tx.businessService.deleteMany({});
-    const removedBusinessPhotos = await tx.businessPhoto.deleteMany({});
-    const removedBusinesses = await tx.business.deleteMany({});
     const removedLeadMessages = await tx.leadMessage.deleteMany({});
     const removedLeadQuotes = await tx.leadQuote.deleteMany({});
     const removedLeads = await tx.lead.deleteMany({});
-    const removedWhatsappOtp = await tx.whatsappOtp.deleteMany({ where: { expiresAt: { lt: now } } });
     const removedEmailOtp = await tx.emailOtp.deleteMany({ where: { expiresAt: { lt: now } } });
 
     return {
       removedAnalyticsEvents: asNum(removedAnalyticsEvents.count),
       removedEnquiries: asNum(removedEnquiries.count),
-      removedBusinessReviews: asNum(removedBusinessReviews.count),
-      removedFavoriteBusinesses: asNum(removedFavoriteBusinesses.count),
-      removedBusinessServices: asNum(removedBusinessServices.count),
-      removedBusinessPhotos: asNum(removedBusinessPhotos.count),
-      removedBusinesses: asNum(removedBusinesses.count),
       removedLeadMessages: asNum(removedLeadMessages.count),
       removedLeadQuotes: asNum(removedLeadQuotes.count),
       removedLeads: asNum(removedLeads.count),
-      removedWhatsappOtp: asNum(removedWhatsappOtp.count),
       removedEmailOtp: asNum(removedEmailOtp.count)
     };
   });
@@ -87,11 +63,6 @@ const main = async () => {
   const after = {
     users: await prisma.user.count(),
     workers: await prisma.user.count({ where: { role: 'worker' } }),
-    businesses: await prisma.business.count(),
-    businessPhotos: await prisma.businessPhoto.count(),
-    businessServices: await prisma.businessService.count(),
-    favoriteBusinesses: await prisma.favoriteBusiness.count(),
-    businessReviews: await prisma.businessReview.count(),
     enquiries: await prisma.enquiry.count(),
     analyticsEvents: await prisma.analyticsEvent.count(),
     bookings: await prisma.booking.count(),
@@ -99,7 +70,6 @@ const main = async () => {
     leads: await prisma.lead.count(),
     leadQuotes: await prisma.leadQuote.count(),
     leadMessages: await prisma.leadMessage.count(),
-    whatsappOtp: await prisma.whatsappOtp.count(),
     emailOtp: await prisma.emailOtp.count()
   };
 

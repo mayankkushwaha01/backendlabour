@@ -13,6 +13,7 @@ const OTP_TTL_MS = 5 * 60 * 1000;
 const LOGIN_WINDOW_MS = 10 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
 const loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+const ipAttempts = new Map<string, { count: number; lockedUntil: number }>();
 
 const normalizePhone = (value: string) => value.replace(/\D/g, '');
 const isValidPhone = (value: string) => /^\d{10,15}$/.test(value);
@@ -32,12 +33,18 @@ const checkPhoneSchema = z.object({
   phone: z.string().min(10).max(15)
 });
 
-const verifyWhatsappOtpSchema = z.object({
+const verifyPhoneOtpSchema = z.object({
   phone: z.string().min(10).max(15),
   otp: z.string().regex(/^\d{6}$/),
   intent: z.enum(['login', 'signup']).default('login'),
   role: z.enum(['customer', 'worker']).optional(),
   name: z.string().min(2).max(120).optional()
+});
+
+const validatePhoneOtpSchema = z.object({
+  phone: z.string().min(10).max(15),
+  otp: z.string().regex(/^\d{6}$/),
+  intent: z.enum(['login', 'signup']).default('signup')
 });
 
 const requestPasswordResetSchema = z.object({
@@ -57,6 +64,8 @@ const signupSchema = z.object({
   phoneOtpCode: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits').optional(),
   password: z.string().min(8),
   role: z.enum(['customer', 'worker']),
+  city: z.string().max(120).optional(),
+  address: z.string().max(280).optional(),
   profilePhotoUrl: z.string().url().or(z.string().regex(dataUrlImageRegex)).or(z.literal('')).optional(),
   aadhaarNumber: z.string().optional(),
   aadhaarCardUrl: z.string().min(10).optional()
@@ -82,7 +91,7 @@ const signupSchema = z.object({
 const loginSchema = z.object({
   email: z.string().optional(),
   identifier: z.string().optional(),
-  password: z.string().min(6)
+  password: z.string().min(8)
 }).superRefine((value, ctx) => {
   const raw = (value.identifier ?? value.email ?? '').trim();
   if (!raw) {
@@ -92,6 +101,13 @@ const loginSchema = z.object({
       message: 'Email, phone or name is required'
     });
   }
+});
+
+const googleMobileSchema = z.object({
+  accessToken: z.string().min(10).optional(),
+  idToken: z.string().min(10).optional()
+}).refine((value) => Boolean(value.accessToken || value.idToken), {
+  message: 'Google token required'
 });
 
 const sendOtpEmail = async (email: string, otpCode: string, subject = 'LabourHub OTP Verification', context = 'verification') => {
@@ -152,10 +168,10 @@ const sendSmsOtp = async (phone: string, otpCode: string) => {
 };
 
 const getLoginAttemptKey = (identifier: string) => normalizePhone(identifier) || identifier.trim().toLowerCase();
+const getIpAttemptKey = (req: any) => String(req.ip || req.headers['x-forwarded-for'] || 'unknown').split(',')[0].trim();
 
-const canAttemptLogin = (identifier: string) => {
-  const key = getLoginAttemptKey(identifier);
-  const entry = loginAttempts.get(key);
+const checkAttemptWindow = (store: Map<string, { count: number; lockedUntil: number }>, key: string) => {
+  const entry = store.get(key);
   if (!entry) return { allowed: true as const };
   if (entry.lockedUntil > Date.now()) {
     const waitMinutes = Math.ceil((entry.lockedUntil - Date.now()) / (60 * 1000));
@@ -165,25 +181,36 @@ const canAttemptLogin = (identifier: string) => {
     };
   }
   if (entry.lockedUntil <= Date.now()) {
-    loginAttempts.delete(key);
+    store.delete(key);
   }
   return { allowed: true as const };
 };
 
-const markLoginFailure = (identifier: string) => {
-  const key = getLoginAttemptKey(identifier);
-  const current = loginAttempts.get(key);
-  const nextCount = (current?.count ?? 0) + 1;
-  const lockedUntil = nextCount >= MAX_LOGIN_ATTEMPTS ? Date.now() + LOGIN_WINDOW_MS : 0;
-  loginAttempts.set(key, { count: nextCount, lockedUntil });
+const canAttemptLogin = (identifier: string, ip: string) => {
+  const identifierCheck = checkAttemptWindow(loginAttempts, getLoginAttemptKey(identifier));
+  if (!identifierCheck.allowed) return identifierCheck;
+  return checkAttemptWindow(ipAttempts, ip);
 };
 
-const clearLoginFailures = (identifier: string) => {
+const markAttemptFailure = (store: Map<string, { count: number; lockedUntil: number }>, key: string) => {
+  const current = store.get(key);
+  const nextCount = (current?.count ?? 0) + 1;
+  const lockedUntil = nextCount >= MAX_LOGIN_ATTEMPTS ? Date.now() + LOGIN_WINDOW_MS : 0;
+  store.set(key, { count: nextCount, lockedUntil });
+};
+
+const markLoginFailure = (identifier: string, ip: string) => {
+  markAttemptFailure(loginAttempts, getLoginAttemptKey(identifier));
+  markAttemptFailure(ipAttempts, ip);
+};
+
+const clearLoginFailures = (identifier: string, ip: string) => {
   loginAttempts.delete(getLoginAttemptKey(identifier));
+  ipAttempts.delete(ip);
 };
 
 const createMobileSession = (user: any) => {
-  const token = jwt.sign({ sub: user.id, role: user.role }, env.jwtSecret, { expiresIn: '7d' });
+  const token = jwt.sign({ sub: user.id, role: user.role, sv: (user as any).sessionVersion ?? 0 }, env.jwtSecret, { expiresIn: '7d' });
   return {
     token,
     user: {
@@ -194,6 +221,89 @@ const createMobileSession = (user: any) => {
       profilePhotoUrl: user.profilePhotoUrl
     }
   };
+};
+
+const fetchGoogleProfile = async (accessToken: string) => {
+  const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.email) {
+    throw new Error(payload?.error_description || payload?.error || 'Invalid Google access token');
+  }
+
+  return payload as {
+    sub?: string;
+    email: string;
+    email_verified?: boolean;
+    name?: string;
+    picture?: string;
+  };
+};
+
+const fetchGoogleProfileByIdToken = async (idToken: string) => {
+  const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.email) {
+    throw new Error(payload?.error_description || payload?.error || 'Invalid Google ID token');
+  }
+
+  return payload as {
+    sub?: string;
+    email: string;
+    email_verified?: string | boolean;
+    name?: string;
+    picture?: string;
+  };
+};
+
+const buildGooglePhoneCandidate = (sub: string, attempt = 0) => {
+  const digits = sub.replace(/\D/g, '') || `${Date.now()}`;
+  const base = digits.slice(-14).padStart(14, '0');
+  const suffix = String(attempt).padStart(2, '0');
+  return `9${base.slice(0, 12)}${suffix}`.slice(0, 15);
+};
+
+const createGoogleCustomer = async (profile: {
+  sub?: string;
+  email: string;
+  email_verified?: boolean | string;
+  name?: string;
+  picture?: string;
+}) => {
+  const passwordHash = await bcrypt.hash(`google-${Date.now()}-${profile.email}`, 10);
+  const sub = profile.sub || `${Date.now()}`;
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const phoneCandidate = buildGooglePhoneCandidate(sub, attempt);
+    try {
+      return await prisma.user.create({
+        data: {
+          name: profile.name?.trim() || profile.email.split('@')[0],
+          email: profile.email.trim().toLowerCase(),
+          phone: phoneCandidate,
+          profilePhotoUrl: profile.picture?.trim() || '',
+          city: 'Prayagraj',
+          address: '',
+          phoneVerified: String(profile.email_verified).toLowerCase() === 'true' || profile.email_verified === true,
+          passwordHash,
+          complaintFlagNote: '',
+          role: 'customer',
+          isApproved: true
+        }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (!message.toLowerCase().includes('unique')) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error('Unable to create Google account');
 };
 
 router.post('/otp/request', async (req, res) => {
@@ -275,7 +385,6 @@ const requestPhoneOtp = async (req: any, res: any) => {
   });
 };
 
-router.post('/otp/whatsapp/request', requestPhoneOtp);
 router.post('/otp/phone/request', requestPhoneOtp);
 
 router.post('/phone/check', async (req, res) => {
@@ -296,8 +405,46 @@ router.post('/phone/check', async (req, res) => {
   });
 });
 
+const validatePhoneOtp = async (req: any, res: any) => {
+  const parsed = validatePhoneOtpSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Invalid request', errors: parsed.error.flatten() });
+  }
+
+  const phone = normalizePhone(parsed.data.phone);
+  if (!isValidPhone(phone)) {
+    return res.status(400).json({ message: 'Invalid phone number format' });
+  }
+
+  const otpRecord = await (prisma as any).whatsappOtp.findFirst({
+    where: { phone, purpose: parsed.data.intent === 'signup' ? 'signup' : 'login' },
+    orderBy: { createdAt: 'desc' }
+  });
+  if (!otpRecord) {
+    return res.status(400).json({ message: 'Please request OTP first' });
+  }
+  if (otpRecord.expiresAt.getTime() < Date.now()) {
+    return res.status(400).json({ message: 'OTP expired. Please request a new OTP' });
+  }
+  if ((otpRecord.attempts ?? 0) >= 5) {
+    return res.status(429).json({ message: 'Too many attempts. Please request OTP again' });
+  }
+
+  const validOtp = await bcrypt.compare(parsed.data.otp, otpRecord.otpHash);
+  if (!validOtp) {
+    await (prisma as any).whatsappOtp.update({
+      where: { id: otpRecord.id },
+      data: { attempts: { increment: 1 } }
+    });
+    return res.status(400).json({ message: 'Invalid OTP' });
+  }
+
+  return res.json({ message: 'OTP verified' });
+};
+
+router.post('/otp/phone/validate', validatePhoneOtp);
 const verifyPhoneOtp = async (req: any, res: any) => {
-  const parsed = verifyWhatsappOtpSchema.safeParse(req.body);
+  const parsed = verifyPhoneOtpSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: 'Invalid request', errors: parsed.error.flatten() });
   }
@@ -338,7 +485,7 @@ const verifyPhoneOtp = async (req: any, res: any) => {
   if (!user && parsed.data.intent === 'signup') {
     const name = parsed.data.name?.trim() || `User ${phone.slice(-4)}`;
     const role = (parsed.data.role ?? 'customer') as UserRole;
-    const passwordHash = await bcrypt.hash(`whatsapp-${Date.now()}-${phone}`, 10);
+    const passwordHash = await bcrypt.hash(`phone-${Date.now()}-${phone}`, 10);
     user = await prisma.user.create({
       data: {
         name,
@@ -367,7 +514,6 @@ const verifyPhoneOtp = async (req: any, res: any) => {
   return res.json(createMobileSession(user));
 };
 
-router.post('/otp/whatsapp/verify', verifyPhoneOtp);
 router.post('/otp/phone/verify', verifyPhoneOtp);
 
 router.post('/login/mobile', async (req, res) => {
@@ -476,14 +622,14 @@ router.post('/signup', async (req, res) => {
 
   const passwordHash = await bcrypt.hash(password, 10);
   const normalizedEmail = email?.trim().toLowerCase() || `${phone}@mobile.labourhub.local`;
-  await prisma.user.create({
+  const createdUser = await prisma.user.create({
     data: {
       name,
       email: normalizedEmail,
       phone,
       profilePhotoUrl: parsed.data.profilePhotoUrl?.trim() || '',
-      city: 'Prayagraj',
-      address: '',
+      city: parsed.data.city?.trim() || 'Prayagraj',
+      address: parsed.data.address?.trim() || '',
       phoneVerified,
       passwordHash,
       complaintFlagNote: '',
@@ -491,6 +637,28 @@ router.post('/signup', async (req, res) => {
       isApproved: role === 'customer'
     }
   });
+
+  if (role === 'customer') {
+    const token = jwt.sign(
+      { sub: createdUser.id, role: createdUser.role, sv: (createdUser as any).sessionVersion ?? 0 },
+      env.jwtSecret,
+      { expiresIn: '7d' }
+    );
+
+    return res.status(201).json({
+      message: 'Signup successful',
+      token,
+      user: {
+        id: createdUser.id,
+        name: createdUser.name,
+        email: createdUser.email,
+        phone: createdUser.phone,
+        city: createdUser.city,
+        address: createdUser.address,
+        role: createdUser.role
+      }
+    });
+  }
 
   return res.status(201).json({ message: 'Signup successful. Worker accounts require admin approval.' });
 });
@@ -503,7 +671,8 @@ router.post('/login', async (req, res) => {
 
   const { password } = parsed.data;
   const rawIdentifier = (parsed.data.identifier ?? parsed.data.email ?? '').trim();
-  const loginGuard = canAttemptLogin(rawIdentifier);
+  const requesterIp = getIpAttemptKey(req);
+  const loginGuard = canAttemptLogin(rawIdentifier, requesterIp);
   if (!loginGuard.allowed) {
     return res.status(429).json({ message: loginGuard.message });
   }
@@ -520,13 +689,13 @@ router.post('/login', async (req, res) => {
   }
 
   if (!user) {
-    markLoginFailure(rawIdentifier);
+    markLoginFailure(rawIdentifier, requesterIp);
     return res.status(401).json({ message: 'Invalid credentials' });
   }
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
-    markLoginFailure(rawIdentifier);
+    markLoginFailure(rawIdentifier, requesterIp);
     return res.status(401).json({ message: 'Invalid credentials' });
   }
 
@@ -534,9 +703,9 @@ router.post('/login', async (req, res) => {
     return res.status(403).json({ message: 'Worker profile pending admin approval' });
   }
 
-  clearLoginFailures(rawIdentifier);
+  clearLoginFailures(rawIdentifier, requesterIp);
 
-  const token = jwt.sign({ sub: user.id, role: user.role }, env.jwtSecret, { expiresIn: '7d' });
+  const token = jwt.sign({ sub: user.id, role: user.role, sv: (user as any).sessionVersion ?? 0 }, env.jwtSecret, { expiresIn: '7d' });
 
   return res.json({
     token,
@@ -548,6 +717,43 @@ router.post('/login', async (req, res) => {
       profilePhotoUrl: user.profilePhotoUrl
     }
   });
+});
+
+router.post('/google/mobile', async (req, res) => {
+  const parsed = googleMobileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Invalid request', errors: parsed.error.flatten() });
+  }
+
+  try {
+    const profile = parsed.data.accessToken
+      ? await fetchGoogleProfile(parsed.data.accessToken)
+      : await fetchGoogleProfileByIdToken(parsed.data.idToken!);
+    let user = await prisma.user.findUnique({
+      where: { email: profile.email.trim().toLowerCase() }
+    });
+
+    if (!user) {
+      user = await createGoogleCustomer(profile);
+    } else if (!user.profilePhotoUrl && profile.picture) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          profilePhotoUrl: profile.picture
+        }
+      });
+    }
+
+    if (user.role === 'worker' && !user.isApproved) {
+      return res.status(403).json({ message: 'Worker profile pending admin approval' });
+    }
+
+    return res.json(createMobileSession(user));
+  } catch (error) {
+    return res.status(401).json({
+      message: error instanceof Error ? error.message : 'Google login failed'
+    });
+  }
 });
 
 router.post('/password/forgot', async (req, res) => {
@@ -617,9 +823,12 @@ router.post('/password/reset', async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
-  await prisma.user.update({
+  await (prisma as any).user.update({
     where: { id: user.id },
-    data: { passwordHash }
+    data: {
+      passwordHash,
+      sessionVersion: { increment: 1 }
+    }
   });
   await prisma.emailOtp.delete({ where: { id: otpRecord.id } });
 
