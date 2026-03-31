@@ -91,7 +91,7 @@ model User {
   phone         String          @unique
   profilePhotoUrl String        @db.LongText
   city          String          
-  address       String          
+  address       String?         
   phoneVerified Boolean         @default(false)
   isVerifiedPlus Boolean        @default(false)
   isPriorityBoosted Boolean     @default(false)
