@@ -10,6 +10,9 @@
     "build": "npm install --include=dev && npx prisma generate",
     "start": "npx prisma db push && npx tsx src/server.ts"
   },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "dependencies": {
     "@prisma/client": "6.3.1",
     "bcryptjs": "^2.4.3",
